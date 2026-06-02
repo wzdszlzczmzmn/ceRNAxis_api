@@ -135,17 +135,9 @@ class RNAInteractionNetworkView(APIView):
                     "reason": "not_found_in_database",
                 })
 
-        nodes = {
-            self.node_key(node): {
-                "id": node.id,
-                "name": node.name,
-                "type": node.rna_type,
-                "species": node.species,
-            }
-            for node in matched_nodes
-        }
-
+        nodes = {}
         edges = {}
+        used_node_keys = set()
 
         if matched_node_ids:
             interactions = (
@@ -167,6 +159,25 @@ class RNAInteractionNetworkView(APIView):
 
             source_key = self.node_key(source)
             target_key = self.node_key(target)
+
+            used_node_keys.add(source_key)
+            used_node_keys.add(target_key)
+
+            if source_key not in nodes:
+                nodes[source_key] = {
+                    "id": source.id,
+                    "name": source.name,
+                    "type": source.rna_type,
+                    "species": source.species,
+                }
+
+            if target_key not in nodes:
+                nodes[target_key] = {
+                    "id": target.id,
+                    "name": target.name,
+                    "type": target.rna_type,
+                    "species": target.species,
+                }
 
             edge_key = (
                 interaction.source_id,
@@ -193,10 +204,21 @@ class RNAInteractionNetworkView(APIView):
                 ],
             }
 
+        for node in matched_nodes:
+            key = self.node_key(node)
+
+            if key not in used_node_keys:
+                ignored_nodes.append({
+                    "name": node.name,
+                    "type": node.rna_type,
+                    "reason": "no_interaction_in_query_scope",
+                })
+
         return {
             "meta": {
                 "input_node_count": len(input_items),
                 "matched_node_count": len(matched_nodes),
+                "returned_node_count": len(nodes),
                 "ignored_node_count": len(ignored_nodes),
                 "edge_count": len(edges),
                 "edge_scope": "matched_input_nodes_only",
