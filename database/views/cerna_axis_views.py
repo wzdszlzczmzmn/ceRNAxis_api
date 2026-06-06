@@ -142,3 +142,6 @@ class RNAInteractionSearchView(ListAPIView):
             queryset = queryset.order_by("id")
 
         return queryset
+
+
+

@@ -155,3 +155,55 @@ class FilterOption(models.Model):
 
     def __str__(self):
         return f"{self.field}: {self.value}"
+
+
+class DatasetMetadata(models.Model):
+    GENE_BIO_TYPE_CHOICES = [
+        ("miRNA", "miRNA"),
+        ("mRNA", "mRNA"),
+        ("lncRNA", "lncRNA"),
+        ("circRNA", "circRNA"),
+    ]
+
+    dataset = models.CharField(max_length=100, unique=True)
+
+    programme = models.CharField(max_length=50)
+    obs_type = models.CharField(max_length=50)
+    reference = models.CharField(max_length=50)
+
+    cancer_type = models.CharField(max_length=50)
+    cancer_type_full_name = models.CharField(max_length=255)
+
+    gene_bio_type = models.CharField(
+        max_length=20,
+        choices=GENE_BIO_TYPE_CHOICES,
+        db_index=True,
+    )
+
+    workflow = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+    )
+
+    sample_nums = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "dataset_metadata"
+        indexes = [
+            models.Index(fields=["programme"]),
+            models.Index(fields=["cancer_type"]),
+            models.Index(fields=["gene_bio_type"]),
+            models.Index(fields=["reference"]),
+            models.Index(fields=["programme", "cancer_type"]),
+            models.Index(fields=["cancer_type", "gene_bio_type"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["programme", "cancer_type", "gene_bio_type", "reference"],
+                name="unique_dataset_metadata_record",
+            )
+        ]
+
+    def __str__(self):
+        return self.dataset

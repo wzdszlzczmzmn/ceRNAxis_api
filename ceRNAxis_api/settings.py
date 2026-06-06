@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from .config_utils import get_required_directory
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -143,3 +144,4 @@ REST_FRAMEWORK = {
 # Custom settings
 WORKSPACE_HOME = os.path.join(BASE_DIR, 'workspace')
 SLURM_SCRIPT_HOME = os.path.join(BASE_DIR, 'scripts', 'slurm_task')
+DATASET_BASE_DIR = get_required_directory("DATASET_BASE_DIR")
