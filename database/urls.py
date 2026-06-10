@@ -17,5 +17,7 @@ urlpatterns = [
     path('dataset_expression_genes/', dataset_views.DatasetExpressionGeneListView.as_view(),
          name='dataset-expression-genes'),
     path('dataset_expression/', dataset_views.DatasetExpressionDataView.as_view(),
-         name='dataset-expression-data')
+         name='dataset-expression-data'),
+    path('dataset_deg_volcano/', dataset_views.DatasetDEGVolcanoView.as_view(),
+         name='dataset-deg-volcano'),
 ]
