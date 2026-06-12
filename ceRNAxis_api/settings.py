@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
-    "database"
+    "database",
+    "analysis"
 ]
 
 MIDDLEWARE = [
@@ -145,3 +146,4 @@ REST_FRAMEWORK = {
 WORKSPACE_HOME = os.path.join(BASE_DIR, 'workspace')
 SLURM_SCRIPT_HOME = os.path.join(BASE_DIR, 'scripts', 'slurm_task')
 DATASET_BASE_DIR = get_required_directory("DATASET_BASE_DIR")
+IMMUNE_ANNOTATION_BASE_DIR = get_required_directory("IMMUNE_ANNOTATION_BASE_DIR")
