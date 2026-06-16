@@ -17,7 +17,7 @@ PAIRED_COHORT_INPUT_FILENAME_MAP = {
 
 EXPRESSION_REQUIRED_COLUMNS = ["sample_id"]
 META_REQUIRED_COLUMNS = ["sample_id", "c_group"]
-META_ALLOWED_GROUPS = {"case", "control"}
+META_REQUIRED_GROUPS = {"case", "control"}
 
 
 class PairedCohortTaskInputError(ValueError):
@@ -192,24 +192,16 @@ def validate_meta_file_columns_and_groups(file_path: Path) -> None:
                 fieldnames=normalized_header,
             )
 
-            observed_groups = set()
-            invalid_groups = set()
+            observed_required_groups = set()
             row_count = 0
 
             for row in dict_reader:
                 row_count += 1
 
-                raw_group = row.get("c_group", "")
-                group = str(raw_group).strip()
+                group = str(row.get("c_group", "")).strip()
 
-                if not group:
-                    invalid_groups.add("<empty>")
-                    continue
-
-                observed_groups.add(group)
-
-                if group not in META_ALLOWED_GROUPS:
-                    invalid_groups.add(group)
+                if group in META_REQUIRED_GROUPS:
+                    observed_required_groups.add(group)
 
     except UnicodeDecodeError:
         raise PairedCohortTaskInputError(
@@ -225,19 +217,12 @@ def validate_meta_file_columns_and_groups(file_path: Path) -> None:
             "Meta file has no data rows."
         )
 
-    if invalid_groups:
-        raise PairedCohortTaskInputError(
-            "Meta file column 'c_group' contains invalid value(s): "
-            f"{', '.join(sorted(invalid_groups))}. "
-            "Allowed values are: case, control."
-        )
-
-    required_groups = {"case", "control"}
-    missing_groups = required_groups - observed_groups
+    missing_groups = META_REQUIRED_GROUPS - observed_required_groups
 
     if missing_groups:
         raise PairedCohortTaskInputError(
-            "Meta file column 'c_group' must contain both case and control. "
+            "Meta file column 'c_group' must contain at least one case "
+            "and at least one control sample. "
             f"Missing group(s): {', '.join(sorted(missing_groups))}."
         )
 
