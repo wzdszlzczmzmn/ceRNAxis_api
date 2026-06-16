@@ -122,3 +122,105 @@ class CustomListQueryTask(models.Model):
             + self.lncRNA_count
             + self.circRNA_count
         )
+
+
+class PairedCohortTask(models.Model):
+    class Status(models.IntegerChoices):
+        Pending = 0, "Pending"
+        Running = 1, "Running"
+        Success = 2, "Success"
+        Failed = 3, "Failed"
+
+    uuid = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    user = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+    )
+
+    task_name = models.CharField(
+        max_length=255,
+    )
+
+    status = models.IntegerField(
+        choices=Status.choices,
+        default=Status.Pending,
+    )
+
+    map_info = models.CharField(
+        max_length=255,
+    )
+
+    deg_method = models.CharField(
+        max_length=32,
+    )
+
+    mrna_file = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    mirna_file = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    lncrna_file = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    meta_file = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    logfc_cutoff_mrna = models.FloatField(default=1)
+    padj_cutoff_mrna = models.FloatField(default=0.05)
+
+    logfc_cutoff_mirna = models.FloatField(default=1)
+    padj_cutoff_mirna = models.FloatField(default=0.05)
+
+    logfc_cutoff_lncrna = models.FloatField(default=1)
+    padj_cutoff_lncrna = models.FloatField(default=0.05)
+
+    create_time = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    finish_time = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "paired_cohort_task"
+        ordering = ["-create_time"]
+
+    def get_workspace_dir_absolute_path(self):
+        return os.path.join(
+            settings.WORKSPACE_HOME,
+            str(self.uuid),
+        )
+
+    def get_input_dir_absolute_path(self):
+        return os.path.join(
+            self.get_workspace_dir_absolute_path(),
+            "input",
+        )
+
+    def get_output_dir_absolute_path(self):
+        return os.path.join(
+            self.get_workspace_dir_absolute_path(),
+            "output",
+        )
