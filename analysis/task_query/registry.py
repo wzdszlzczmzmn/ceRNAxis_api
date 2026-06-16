@@ -3,10 +3,11 @@ from typing import Callable, Type
 
 from django.db import models
 
-from analysis.models import CustomListQueryTask
+from analysis.models import CustomListQueryTask, PairedCohortTask
 
 from .formatters import (
     format_custom_list_query_task,
+    format_paired_cohort_task,
 )
 
 
@@ -22,6 +23,11 @@ TASK_REGISTRY = [
         task_type="CustomListQueryTask",
         model=CustomListQueryTask,
         formatter=format_custom_list_query_task,
+    ),
+    TaskTypeConfig(
+        task_type="PairedCohortTask",
+        model=PairedCohortTask,
+        formatter=format_paired_cohort_task,
     ),
 ]
 

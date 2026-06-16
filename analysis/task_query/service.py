@@ -2,12 +2,9 @@ import uuid as uuid_lib
 
 from .registry import (
     find_task_by_uuid,
-    TaskNotFoundError,
-    MultipleTaskMatchedError,
 )
 from .status_sync import (
     sync_task_status,
-    TaskStatusSyncError,
 )
 
 
