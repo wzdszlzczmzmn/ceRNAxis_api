@@ -1,6 +1,7 @@
 from django.urls import path
 
-from analysis.views import workflow_views, workflow_submit_views, workflow_query_views, workflow_detail_views
+from analysis.views import workflow_views, workflow_submit_views, workflow_query_views, workflow_detail_views, \
+    workflow_demo_view
 
 urlpatterns = [
     path('immune_annotations/', workflow_views.WorkflowImmuneAnnotationListView.as_view(),
@@ -12,8 +13,38 @@ urlpatterns = [
     path('custom_list_query_task_submit/', workflow_submit_views.CustomListQueryTaskSubmitView.as_view(),
          name='custom_list_query_task_submit'),
     path('query_task/', workflow_query_views.QueryTaskView.as_view(), name='query_task'),
-    path('custom_list_query_network/', workflow_detail_views.WorkflowRNAInteractionNetworkView.as_view(),
+    path('custom_list_query_network/', workflow_detail_views.CustomListQueryTaskNetworkView.as_view(),
          name='custom_list_query_network'),
     path('paired_cohort_task_submit/', workflow_submit_views.PairedCohortTaskSubmitView.as_view(),
          name='paired_cohort_task_submit'),
+    path('paired_cohort_uploaded_file_download/', workflow_detail_views.PairedCohortUploadedFileDownloadView.as_view(),
+         name='paired_cohort_uploaded_file_download'),
+    path('paired_cohort_deg_volcano/', workflow_detail_views.PairedCohortDEGVolcanoView.as_view(),
+         name='paired_cohort_deg_volcano'),
+    path('paired_cohort_correlation/', workflow_detail_views.PairedCohortLog2FCCorrelationView.as_view(),
+         name='paired_cohort_correlation'),
+    path('paired_cohort_exp_correlation_options/',
+         workflow_detail_views.PairedCohortExpCorrelationOptionsView.as_view(),
+         name='paired_cohort_exp_correlation_options'),
+    path('paired_cohort_exp_correlation_plot_data/',
+         workflow_detail_views.PairedCohortExpCorrelationPlotDataView.as_view(),
+         name='paired_cohort_exp_correlation_plot_data'),
+    path('paired_cohort_task_network/', workflow_detail_views.PairedCohortTaskNetworkView.as_view(),
+         name='paired_cohort_task_network'),
+    path('workflow_task_result_download/', workflow_detail_views.WorkflowTaskResultDownloadView.as_view(),
+         name='workflow_task_result_download'),
+    path('paired_cohort_demo_info/', workflow_demo_view.PairedCohortDemoInfoView.as_view(),
+         name='paired_cohort_demo_info'),
+    path('paired_cohort_demo_sample_meta/', workflow_demo_view.PairedCohortDemoSampleMetaView.as_view(),
+         name='paired_cohort_demo_sample_meta'),
+    path('paired_cohort_demo_expression_gene_list/', workflow_demo_view.PairedCohortDemoExpressionGeneListView.as_view(),
+         name='paired_cohort_demo_expression_gene_list'),
+    path('paired_cohort_demo_expression_data/', workflow_demo_view.PairedCohortDemoExpressionDataView.as_view(),
+         name='paired_cohort_demo_expression_data'),
+    path('paired_cohort_demo_download_data/', workflow_demo_view.PairedCohortDemoDataDownloadView.as_view(),
+         name='paired_cohort_demo_download_data'),
+    path('custom_list_query_run_demo/', workflow_demo_view.CustomListQueryDemoRunView.as_view(),
+         name='custom_list_query_run_demo'),
+    path('paired_cohort_run_demo/', workflow_demo_view.PairedCohortDemoRunView.as_view(),
+         name='paired_cohort_run_demo'),
 ]

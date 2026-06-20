@@ -1,11 +1,12 @@
 import uuid as uuid_lib
 
 from .registry import (
-    find_task_by_uuid,
+    get_query_config_by_task_type,
 )
 from .status_sync import (
     sync_task_status,
 )
+from ..task_common.registry import find_task_by_uuid
 
 
 class InvalidTaskUUIDError(ValueError):
@@ -22,13 +23,17 @@ def validate_task_uuid(task_uuid: str) -> None:
 def query_task_by_uuid(task_uuid: str) -> dict:
     validate_task_uuid(task_uuid)
 
-    task, config = find_task_by_uuid(task_uuid)
+    task, task_model_config = find_task_by_uuid(task_uuid)
 
     sync_result = sync_task_status(task)
 
+    query_config = get_query_config_by_task_type(
+        task_model_config.task_type
+    )
+
     return {
-        "task_type": config.task_type,
-        "data": config.formatter(
+        "task_type": task_model_config.task_type,
+        "data": query_config.formatter(
             task,
             position=sync_result.position,
         ),

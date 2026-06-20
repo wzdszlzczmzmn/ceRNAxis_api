@@ -1,0 +1,26 @@
+{
+  "task_type": "PairedCohortTask",
+  "task_name": "demo_task",
+  "map_info": "ImmiRImmiR_ACC",
+  "deg_method": "limma",
+  "files": {
+    "mrna_file": "mrna.csv",
+    "mirna_file": "mirna.csv",
+    "lncrna_file": "lncrna.csv",
+    "meta_file": "meta.csv"
+  },
+  "cutoffs": {
+    "mRNA": {
+      "logfc_cutoff": 1,
+      "padj_cutoff": 0.1
+    },
+    "miRNA": {
+      "logfc_cutoff": 0.5,
+      "padj_cutoff": 0.3
+    },
+    "lncRNA": {
+      "logfc_cutoff": 0.5,
+      "padj_cutoff": 0.3
+    }
+  }
+}

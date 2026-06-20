@@ -1,33 +1,25 @@
 from dataclasses import dataclass
-from typing import Callable, Type
+from typing import Type
 
 from django.db import models
 
 from analysis.models import CustomListQueryTask, PairedCohortTask
 
-from .formatters import (
-    format_custom_list_query_task,
-    format_paired_cohort_task,
-)
-
 
 @dataclass(frozen=True)
-class TaskTypeConfig:
+class TaskModelConfig:
     task_type: str
     model: Type[models.Model]
-    formatter: Callable
 
 
-TASK_REGISTRY = [
-    TaskTypeConfig(
+TASK_MODEL_REGISTRY = [
+    TaskModelConfig(
         task_type="CustomListQueryTask",
         model=CustomListQueryTask,
-        formatter=format_custom_list_query_task,
     ),
-    TaskTypeConfig(
+    TaskModelConfig(
         task_type="PairedCohortTask",
         model=PairedCohortTask,
-        formatter=format_paired_cohort_task,
     ),
 ]
 
@@ -43,7 +35,7 @@ class MultipleTaskMatchedError(Exception):
 def find_task_by_uuid(task_uuid: str):
     matched = []
 
-    for config in TASK_REGISTRY:
+    for config in TASK_MODEL_REGISTRY:
         try:
             task = config.model.objects.get(uuid=task_uuid)
             matched.append((task, config))

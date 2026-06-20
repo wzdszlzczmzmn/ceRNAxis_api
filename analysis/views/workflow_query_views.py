@@ -4,15 +4,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from analysis.task_query.service import (
+from analysis.services.task_common.registry import TaskNotFoundError, MultipleTaskMatchedError
+from analysis.services.task_query.service import (
     query_task_by_uuid,
     InvalidTaskUUIDError,
 )
-from analysis.task_query.registry import (
-    TaskNotFoundError,
-    MultipleTaskMatchedError,
-)
-from analysis.task_query.status_sync import (
+from analysis.services.task_query.status_sync import (
     TaskStatusSyncError,
 )
 

@@ -1,0 +1,15 @@
+{
+  "task_type": "PairedCohortTask",
+  "description": "Example input files for paired cohort analysis.",
+  "csv_files": {
+    "mrna_file": "mrna.csv",
+    "mirna_file": "mirna.csv",
+    "lncrna_file": "lncrna.csv",
+    "meta_file": "meta.csv"
+  },
+  "parquet_files": {
+    "mrna_file": "mrna.parquet",
+    "mirna_file": "mirna.parquet",
+    "lncrna_file": "lncrna.parquet"
+  }
+}
