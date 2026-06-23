@@ -17,11 +17,6 @@ set -Eeuo pipefail
 #   <circrna_file> \
 #   <meta_file> \
 #   <outdir> \
-#   <expr_sample_col> \
-#   <meta_sample_col> \
-#   <group_col> \
-#   <case_label> \
-#   <control_label> \
 #   <logfc_cutoff_mrna> \
 #   <padj_cutoff_mrna> \
 #   <logfc_cutoff_mirna> \
@@ -33,9 +28,9 @@ set -Eeuo pipefail
 #   <deg_method> \
 #   <map_info_csv>
 
-if [ $# -lt 23 ]; then
+if [ $# -lt 18 ]; then
     echo "Error: Missing arguments."
-    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <mirna_file> <lncrna_file> <circrna_file> <meta_file> <outdir> <expr_sample_col> <meta_sample_col> <group_col> <case_label> <control_label> <logfc_cutoff_mrna> <padj_cutoff_mrna> <logfc_cutoff_mirna> <padj_cutoff_mirna> <logfc_cutoff_lncrna> <padj_cutoff_lncrna> <logfc_cutoff_circrna> <padj_cutoff_circrna> <deg_method> <map_info_csv>"
+    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <mirna_file> <lncrna_file> <circrna_file> <meta_file> <outdir> <logfc_cutoff_mrna> <padj_cutoff_mrna> <logfc_cutoff_mirna> <padj_cutoff_mirna> <logfc_cutoff_lncrna> <padj_cutoff_lncrna> <logfc_cutoff_circrna> <padj_cutoff_circrna> <deg_method> <map_info_csv>"
     exit 1
 fi
 
@@ -47,21 +42,24 @@ lncrna_file="$5"
 circrna_file="$6"
 meta_file="$7"
 outdir="$8"
-expr_sample_col="$9"
-meta_sample_col="${10}"
-group_col="${11}"
-case_label="${12}"
-control_label="${13}"
-logfc_cutoff_mrna="${14}"
-padj_cutoff_mrna="${15}"
-logfc_cutoff_mirna="${16}"
-padj_cutoff_mirna="${17}"
-logfc_cutoff_lncrna="${18}"
-padj_cutoff_lncrna="${19}"
-logfc_cutoff_circrna="${20}"
-padj_cutoff_circrna="${21}"
-deg_method="${22}"
-map_info_csv="${23}"
+
+logfc_cutoff_mrna="$9"
+padj_cutoff_mrna="${10}"
+logfc_cutoff_mirna="${11}"
+padj_cutoff_mirna="${12}"
+logfc_cutoff_lncrna="${13}"
+padj_cutoff_lncrna="${14}"
+logfc_cutoff_circrna="${15}"
+padj_cutoff_circrna="${16}"
+deg_method="${17}"
+map_info_csv="${18}"
+
+# Fixed parameters for Module2.
+expr_sample_col="sample_id"
+meta_sample_col="sample_id"
+group_col="c_group"
+case_label="case"
+control_label="control"
 
 script_wdr="/home/platform/workspace/ceRNAixDB"
 
