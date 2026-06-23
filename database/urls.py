@@ -20,4 +20,8 @@ urlpatterns = [
          name='dataset-expression-data'),
     path('dataset_deg_volcano/', dataset_views.DatasetDEGVolcanoView.as_view(),
          name='dataset-deg-volcano'),
+    path('aliquot_expression_download_files/', dataset_views.DatasetAliquotExpressionFileListView.as_view(),
+         name='aliquot-expression-download-files'),
+    path('aliquot_expression_file_download/', dataset_views.DatasetAliquotExpressionFileDownloadView.as_view(),
+         name='aliquot-expression-download-file'),
 ]

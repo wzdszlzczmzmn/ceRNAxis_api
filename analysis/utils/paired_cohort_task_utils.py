@@ -8,6 +8,7 @@ PAIRED_COHORT_ALLOWED_FILE_FIELDS = [
     "mrna_file",
     "mirna_file",
     "lncrna_file",
+    "circrna_file",
     "meta_file",
 ]
 
@@ -15,6 +16,7 @@ PAIRED_COHORT_INPUT_FILENAME_MAP = {
     "mrna_file": "mrna.csv",
     "mirna_file": "mirna.csv",
     "lncrna_file": "lncrna.csv",
+    "circrna_file": "circrna.csv",
     "meta_file": "meta.csv",
 }
 

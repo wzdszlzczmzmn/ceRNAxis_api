@@ -181,6 +181,7 @@ def sbatch_paired_cohort_task(task_uuid) -> dict:
         str(input_files["mrna_file"]),
         str(input_files["mirna_file"]),
         str(input_files["lncrna_file"]),
+        str(input_files["circrna_file"]),
         str(input_files["meta_file"]),
         str(output_dir),
         str(task.logfc_cutoff_mrna),
@@ -189,6 +190,8 @@ def sbatch_paired_cohort_task(task_uuid) -> dict:
         str(task.padj_cutoff_mirna),
         str(task.logfc_cutoff_lncrna),
         str(task.padj_cutoff_lncrna),
+        str(task.logfc_cutoff_circrna),
+        str(task.padj_cutoff_circrna),
         task.deg_method,
         str(map_info_file),
     ]

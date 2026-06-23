@@ -179,6 +179,12 @@ class PairedCohortTask(models.Model):
         default="",
     )
 
+    circrna_file = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
     meta_file = models.CharField(
         max_length=255,
         blank=True,
@@ -193,6 +199,9 @@ class PairedCohortTask(models.Model):
 
     logfc_cutoff_lncrna = models.FloatField(default=1)
     padj_cutoff_lncrna = models.FloatField(default=0.05)
+
+    logfc_cutoff_circrna = models.FloatField(default=1.0)
+    padj_cutoff_circrna = models.FloatField(default=0.1)
 
     create_time = models.DateTimeField(
         auto_now_add=True,

@@ -14,20 +14,28 @@ set -Eeuo pipefail
 #   <mrna_file> \
 #   <mirna_file> \
 #   <lncrna_file> \
+#   <circrna_file> \
 #   <meta_file> \
 #   <outdir> \
+#   <expr_sample_col> \
+#   <meta_sample_col> \
+#   <group_col> \
+#   <case_label> \
+#   <control_label> \
 #   <logfc_cutoff_mrna> \
 #   <padj_cutoff_mrna> \
 #   <logfc_cutoff_mirna> \
 #   <padj_cutoff_mirna> \
 #   <logfc_cutoff_lncrna> \
 #   <padj_cutoff_lncrna> \
+#   <logfc_cutoff_circrna> \
+#   <padj_cutoff_circrna> \
 #   <deg_method> \
 #   <map_info_csv>
 
-if [ $# -lt 15 ]; then
+if [ $# -lt 23 ]; then
     echo "Error: Missing arguments."
-    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <mirna_file> <lncrna_file> <meta_file> <outdir> <logfc_cutoff_mrna> <padj_cutoff_mrna> <logfc_cutoff_mirna> <padj_cutoff_mirna> <logfc_cutoff_lncrna> <padj_cutoff_lncrna> <deg_method> <map_info_csv>"
+    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <mirna_file> <lncrna_file> <circrna_file> <meta_file> <outdir> <expr_sample_col> <meta_sample_col> <group_col> <case_label> <control_label> <logfc_cutoff_mrna> <padj_cutoff_mrna> <logfc_cutoff_mirna> <padj_cutoff_mirna> <logfc_cutoff_lncrna> <padj_cutoff_lncrna> <logfc_cutoff_circrna> <padj_cutoff_circrna> <deg_method> <map_info_csv>"
     exit 1
 fi
 
@@ -36,25 +44,25 @@ dataset="$2"
 mrna_file="$3"
 mirna_file="$4"
 lncrna_file="$5"
-meta_file="$6"
-outdir="$7"
-logfc_cutoff_mrna="$8"
-padj_cutoff_mrna="$9"
-logfc_cutoff_mirna="${10}"
-padj_cutoff_mirna="${11}"
-logfc_cutoff_lncrna="${12}"
-padj_cutoff_lncrna="${13}"
-deg_method="${14}"
-map_info_csv="${15}"
+circrna_file="$6"
+meta_file="$7"
+outdir="$8"
+expr_sample_col="$9"
+meta_sample_col="${10}"
+group_col="${11}"
+case_label="${12}"
+control_label="${13}"
+logfc_cutoff_mrna="${14}"
+padj_cutoff_mrna="${15}"
+logfc_cutoff_mirna="${16}"
+padj_cutoff_mirna="${17}"
+logfc_cutoff_lncrna="${18}"
+padj_cutoff_lncrna="${19}"
+logfc_cutoff_circrna="${20}"
+padj_cutoff_circrna="${21}"
+deg_method="${22}"
+map_info_csv="${23}"
 
-# Fixed parameters for Module2.
-expr_sample_col="sample_id"
-meta_sample_col="sample_id"
-group_col="c_group"
-case_label="case"
-control_label="control"
-
-# 根据实际部署路径修改
 script_wdr="/home/platform/workspace/ceRNAixDB"
 
 status_file="${outdir}/status.txt"
@@ -87,6 +95,7 @@ echo "dataset: ${dataset}"
 echo "mrna_file: ${mrna_file}"
 echo "mirna_file: ${mirna_file}"
 echo "lncrna_file: ${lncrna_file}"
+echo "circrna_file: ${circrna_file}"
 echo "meta_file: ${meta_file}"
 echo "outdir: ${outdir}"
 echo "expr_sample_col: ${expr_sample_col}"
@@ -100,6 +109,8 @@ echo "logfc_cutoff_mirna: ${logfc_cutoff_mirna}"
 echo "padj_cutoff_mirna: ${padj_cutoff_mirna}"
 echo "logfc_cutoff_lncrna: ${logfc_cutoff_lncrna}"
 echo "padj_cutoff_lncrna: ${padj_cutoff_lncrna}"
+echo "logfc_cutoff_circrna: ${logfc_cutoff_circrna}"
+echo "padj_cutoff_circrna: ${padj_cutoff_circrna}"
 echo "deg_method: ${deg_method}"
 echo "map_info_csv: ${map_info_csv}"
 echo "script_wdr: ${script_wdr}"
@@ -125,6 +136,10 @@ if [ ! -f "${lncrna_file}" ]; then
     fail_task "lncrna_file does not exist: ${lncrna_file}"
 fi
 
+if [ ! -f "${circrna_file}" ]; then
+    fail_task "circrna_file does not exist: ${circrna_file}"
+fi
+
 if [ ! -f "${meta_file}" ]; then
     fail_task "meta_file does not exist: ${meta_file}"
 fi
@@ -144,6 +159,7 @@ bash "${script_wdr}/run/run_module2_all.sh" \
     "${mrna_file}" \
     "${mirna_file}" \
     "${lncrna_file}" \
+    "${circrna_file}" \
     "${meta_file}" \
     "${outdir}" \
     "${expr_sample_col}" \
@@ -157,6 +173,8 @@ bash "${script_wdr}/run/run_module2_all.sh" \
     "${padj_cutoff_mirna}" \
     "${logfc_cutoff_lncrna}" \
     "${padj_cutoff_lncrna}" \
+    "${logfc_cutoff_circrna}" \
+    "${padj_cutoff_circrna}" \
     "${deg_method}" \
     "${map_info_csv}"
 

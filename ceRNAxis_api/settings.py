@@ -145,6 +145,7 @@ REST_FRAMEWORK = {
 # Custom settings
 WORKSPACE_HOME = os.path.join(BASE_DIR, 'workspace')
 SLURM_SCRIPT_HOME = os.path.join(BASE_DIR, 'scripts', 'slurm_task')
-DATASET_BASE_DIR = get_required_directory("DATASET_BASE_DIR")
+TCGA_DATASET_BASE_DIR = get_required_directory("TCGA_DATASET_BASE_DIR")
+TIMEDB_DATASET_BASE_DIR = get_required_directory("TIMEDB_DATASET_BASE_DIR")
 IMMUNE_ANNOTATION_BASE_DIR = get_required_directory("IMMUNE_ANNOTATION_BASE_DIR")
 DEMO_INPUT_DATA_HOME = os.path.join(BASE_DIR, 'demo_data', 'input_example')

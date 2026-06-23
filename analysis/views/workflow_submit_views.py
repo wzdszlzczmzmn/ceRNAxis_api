@@ -210,7 +210,10 @@ class PairedCohortTaskSubmitView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "msg": "Invalid field: deg_method. Allowed values: limma, deseq2.",
+                        "msg": (
+                            "Invalid field: deg_method. "
+                            "Allowed values: limma, deseq2."
+                        ),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -225,7 +228,10 @@ class PairedCohortTaskSubmitView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "msg": f"Missing uploaded file(s): {', '.join(missing_files)}.",
+                        "msg": (
+                            f"Missing uploaded file(s): "
+                            f"{', '.join(missing_files)}."
+                        ),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -255,6 +261,15 @@ class PairedCohortTaskSubmitView(APIView):
                     request,
                     "padj_cutoff_lncrna",
                 )
+                logfc_cutoff_circrna = self.parse_float_field(
+                    request,
+                    "logfc_cutoff_circrna",
+                )
+                padj_cutoff_circrna = self.parse_float_field(
+                    request,
+                    "padj_cutoff_circrna",
+                )
+
             except ValueError as e:
                 return Response(
                     {
@@ -276,6 +291,8 @@ class PairedCohortTaskSubmitView(APIView):
                 padj_cutoff_mirna=padj_cutoff_mirna,
                 logfc_cutoff_lncrna=logfc_cutoff_lncrna,
                 padj_cutoff_lncrna=padj_cutoff_lncrna,
+                logfc_cutoff_circrna=logfc_cutoff_circrna,
+                padj_cutoff_circrna=padj_cutoff_circrna,
             )
 
             try:
@@ -291,12 +308,15 @@ class PairedCohortTaskSubmitView(APIView):
                 task.mrna_file = saved_files["mrna_file"]
                 task.mirna_file = saved_files["mirna_file"]
                 task.lncrna_file = saved_files["lncrna_file"]
+                task.circrna_file = saved_files["circrna_file"]
                 task.meta_file = saved_files["meta_file"]
+
                 task.save(
                     update_fields=[
                         "mrna_file",
                         "mirna_file",
                         "lncrna_file",
+                        "circrna_file",
                         "meta_file",
                     ]
                 )
@@ -315,9 +335,9 @@ class PairedCohortTaskSubmitView(APIView):
                 )
 
             except (
-                    OSError,
-                    PairedCohortTaskPathError,
-                    FileNotFoundError,
+                OSError,
+                PairedCohortTaskPathError,
+                FileNotFoundError,
             ) as e:
                 task.status = PairedCohortTask.Status.Failed
                 task.finish_time = timezone.now()
@@ -325,11 +345,10 @@ class PairedCohortTaskSubmitView(APIView):
 
                 return Response(
                     {
-
                         "success": False,
-
-                        "msg": f"Failed to prepare task workspace: {str(e)}",
-
+                        "msg": (
+                            f"Failed to prepare task workspace: {str(e)}"
+                        ),
                     },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
@@ -367,6 +386,7 @@ class PairedCohortTaskSubmitView(APIView):
                             "mrna_file": task.mrna_file,
                             "mirna_file": task.mirna_file,
                             "lncrna_file": task.lncrna_file,
+                            "circrna_file": task.circrna_file,
                             "meta_file": task.meta_file,
                         },
                         "cutoffs": {
@@ -381,6 +401,10 @@ class PairedCohortTaskSubmitView(APIView):
                             "lncRNA": {
                                 "logfc_cutoff": task.logfc_cutoff_lncrna,
                                 "padj_cutoff": task.padj_cutoff_lncrna,
+                            },
+                            "circRNA": {
+                                "logfc_cutoff": task.logfc_cutoff_circrna,
+                                "padj_cutoff": task.padj_cutoff_circrna,
                             },
                         },
                     },

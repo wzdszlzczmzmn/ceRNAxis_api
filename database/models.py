@@ -198,12 +198,6 @@ class DatasetMetadata(models.Model):
             models.Index(fields=["programme", "cancer_type"]),
             models.Index(fields=["cancer_type", "gene_bio_type"]),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["programme", "cancer_type", "gene_bio_type", "reference"],
-                name="unique_dataset_metadata_record",
-            )
-        ]
 
     def __str__(self):
         return self.dataset
