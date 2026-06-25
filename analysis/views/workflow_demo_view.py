@@ -365,6 +365,7 @@ class PairedCohortDemoRunView(APIView):
                 task.mrna_file = saved_files["mrna_file"]
                 task.mirna_file = saved_files["mirna_file"]
                 task.lncrna_file = saved_files["lncrna_file"]
+                task.circrna_file = saved_files["circrna_file"]
                 task.meta_file = saved_files["meta_file"]
 
                 task.save(
@@ -372,6 +373,7 @@ class PairedCohortDemoRunView(APIView):
                         "mrna_file",
                         "mirna_file",
                         "lncrna_file",
+                        "circrna_file",
                         "meta_file",
                     ]
                 )
@@ -446,6 +448,7 @@ class PairedCohortDemoRunView(APIView):
                             "mrna_file": task.mrna_file,
                             "mirna_file": task.mirna_file,
                             "lncrna_file": task.lncrna_file,
+                            "circrna_file": task.circrna_file,
                             "meta_file": task.meta_file,
                         },
                         "cutoffs": {
@@ -460,6 +463,10 @@ class PairedCohortDemoRunView(APIView):
                             "lncRNA": {
                                 "logfc_cutoff": task.logfc_cutoff_lncrna,
                                 "padj_cutoff": task.padj_cutoff_lncrna,
+                            },
+                            "circRNA": {
+                                "logfc_cutoff": task.logfc_cutoff_circrna,
+                                "padj_cutoff": task.padj_cutoff_circrna,
                             },
                         },
                     },

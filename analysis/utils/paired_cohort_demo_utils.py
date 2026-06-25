@@ -22,6 +22,7 @@ PAIRED_COHORT_DEMO_RNA_TYPE_TO_FILE_KEY = {
     "mRNA": "mrna_file",
     "miRNA": "mirna_file",
     "lncRNA": "lncrna_file",
+    "circRNA": "circrna_file",
 }
 
 PAIRED_COHORT_DEMO_INPUT_FILENAME = "paired_cohort_demo_input.json"
@@ -37,6 +38,7 @@ PAIRED_COHORT_DEMO_CUTOFF_RNA_TYPES = [
     "mRNA",
     "miRNA",
     "lncRNA",
+    "circRNA",
 ]
 
 PAIRED_COHORT_DEMO_VALID_RNA_TYPES = list(
@@ -131,6 +133,7 @@ def validate_paired_cohort_demo_manifest(manifest: dict) -> None:
         "mrna_file",
         "mirna_file",
         "lncrna_file",
+        "circrna_file",
         "meta_file",
     ]
 
@@ -138,6 +141,7 @@ def validate_paired_cohort_demo_manifest(manifest: dict) -> None:
         "mrna_file",
         "mirna_file",
         "lncrna_file",
+        "circrna_file",
     ]
 
     missing_csv_keys = [
@@ -555,6 +559,7 @@ def get_paired_cohort_demo_cutoff_fields(config: dict) -> dict:
             rna_type="mRNA",
             cutoff_name="padj_cutoff",
         ),
+
         "logfc_cutoff_mirna": parse_demo_cutoff(
             config=config,
             rna_type="miRNA",
@@ -565,6 +570,7 @@ def get_paired_cohort_demo_cutoff_fields(config: dict) -> dict:
             rna_type="miRNA",
             cutoff_name="padj_cutoff",
         ),
+
         "logfc_cutoff_lncrna": parse_demo_cutoff(
             config=config,
             rna_type="lncRNA",
@@ -573,6 +579,17 @@ def get_paired_cohort_demo_cutoff_fields(config: dict) -> dict:
         "padj_cutoff_lncrna": parse_demo_cutoff(
             config=config,
             rna_type="lncRNA",
+            cutoff_name="padj_cutoff",
+        ),
+
+        "logfc_cutoff_circrna": parse_demo_cutoff(
+            config=config,
+            rna_type="circRNA",
+            cutoff_name="logfc_cutoff",
+        ),
+        "padj_cutoff_circrna": parse_demo_cutoff(
+            config=config,
+            rna_type="circRNA",
             cutoff_name="padj_cutoff",
         ),
     }

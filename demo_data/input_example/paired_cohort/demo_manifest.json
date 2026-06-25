@@ -5,11 +5,13 @@
     "mrna_file": "mrna.csv",
     "mirna_file": "mirna.csv",
     "lncrna_file": "lncrna.csv",
+    "circrna_file": "circrna.csv",
     "meta_file": "meta.csv"
   },
   "parquet_files": {
     "mrna_file": "mrna.parquet",
     "mirna_file": "mirna.parquet",
-    "lncrna_file": "lncrna.parquet"
+    "lncrna_file": "lncrna.parquet",
+    "circrna_file": "circrna.parquet"
   }
 }
