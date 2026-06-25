@@ -1,5 +1,8 @@
 from django.utils import timezone
 
+from analysis.utils.paired_cohort_task_utils import get_available_paired_cohort_deg_rna_types, \
+    PairedCohortTaskPathError, get_available_paired_cohort_background_types, PairedCohortTaskInputError
+
 
 def format_datetime(value):
     if value is None:
@@ -43,6 +46,16 @@ def format_custom_list_query_task(task, position=0) -> dict:
 
 
 def format_paired_cohort_task(task, position=0) -> dict:
+    try:
+        available_deg_rna_types = get_available_paired_cohort_deg_rna_types(task)
+    except (OSError, PairedCohortTaskPathError):
+        available_deg_rna_types = []
+
+    try:
+        available_background_types = get_available_paired_cohort_background_types(task)
+    except (OSError, PairedCohortTaskPathError, PairedCohortTaskInputError):
+        available_background_types = []
+
     return {
         "uuid": str(task.uuid),
         "status": task.status,
@@ -56,6 +69,7 @@ def format_paired_cohort_task(task, position=0) -> dict:
             "mrna_file": task.mrna_file,
             "mirna_file": task.mirna_file,
             "lncrna_file": task.lncrna_file,
+            "circrna_file": task.circrna_file,
             "meta_file": task.meta_file,
         },
         "cutoffs": {
@@ -71,5 +85,11 @@ def format_paired_cohort_task(task, position=0) -> dict:
                 "logfc_cutoff": task.logfc_cutoff_lncrna,
                 "padj_cutoff": task.padj_cutoff_lncrna,
             },
+            "circRNA": {
+                "logfc_cutoff": task.logfc_cutoff_circrna,
+                "padj_cutoff": task.padj_cutoff_circrna,
+            },
         },
+        "available_deg_rna_types": available_deg_rna_types,
+        "available_background_types": available_background_types,
     }

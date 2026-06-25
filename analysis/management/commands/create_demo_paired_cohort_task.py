@@ -7,26 +7,30 @@ from django.utils import timezone
 from analysis.models import PairedCohortTask
 
 
-DEMO_UUID = "9de2c6b5-034c-4c4c-811a-976fbac53215"
+DEMO_UUID = "3603a460-1972-4771-b3e0-21e05f00d9c8"
 DEMO_TASK_NAME = "demo_task"
-DEMO_MAP_INFO = "ImmiRImmiR_ACC"
+DEMO_MAP_INFO = "ImmiRImmiR_LUAD"
 DEMO_DEG_METHOD = "limma"
-DEMO_CREATE_TIME = "2026-06-16 09:24:09"
-DEMO_FINISH_TIME = "2026-06-16 09:24:48"
+DEMO_CREATE_TIME = "2026-06-24 09:45:42"
+DEMO_FINISH_TIME = "2026-06-24 09:47:27"
 
 DEMO_MRNA_FILE = "mrna.csv"
 DEMO_MIRNA_FILE = "mirna.csv"
 DEMO_LNCRNA_FILE = "lncrna.csv"
+DEMO_CIRCRNA_FILE = "circrna.csv"
 DEMO_META_FILE = "meta.csv"
 
-DEMO_LOGFC_CUTOFF_MRNA = 1.0
+DEMO_LOGFC_CUTOFF_MRNA = 1e-6
 DEMO_PADJ_CUTOFF_MRNA = 0.1
 
-DEMO_LOGFC_CUTOFF_MIRNA = 0.5
+DEMO_LOGFC_CUTOFF_MIRNA = 1e-6
 DEMO_PADJ_CUTOFF_MIRNA = 0.3
 
-DEMO_LOGFC_CUTOFF_LNCRNA = 0.5
+DEMO_LOGFC_CUTOFF_LNCRNA = 1e-6
 DEMO_PADJ_CUTOFF_LNCRNA = 0.3
+
+DEMO_LOGFC_CUTOFF_CIRCRNA = 1e-6
+DEMO_PADJ_CUTOFF_CIRCRNA = 0.3
 
 
 def make_aware_datetime(datetime_string: str):
@@ -108,6 +112,12 @@ class Command(BaseCommand):
         )
 
         parser.add_argument(
+            "--circrna-file",
+            default=DEMO_CIRCRNA_FILE,
+            help="Stored circRNA expression filename.",
+        )
+
+        parser.add_argument(
             "--meta-file",
             default=DEMO_META_FILE,
             help="Stored metadata filename.",
@@ -156,6 +166,20 @@ class Command(BaseCommand):
         )
 
         parser.add_argument(
+            "--logfc-cutoff-circrna",
+            type=float,
+            default=DEMO_LOGFC_CUTOFF_CIRCRNA,
+            help="circRNA logFC cutoff.",
+        )
+
+        parser.add_argument(
+            "--padj-cutoff-circrna",
+            type=float,
+            default=DEMO_PADJ_CUTOFF_CIRCRNA,
+            help="circRNA adjusted P-value cutoff.",
+        )
+
+        parser.add_argument(
             "--create-time",
             default=DEMO_CREATE_TIME,
             help="Create time, format: YYYY-MM-DD HH:MM:SS.",
@@ -197,6 +221,7 @@ class Command(BaseCommand):
                 "mrna_file": options["mrna_file"],
                 "mirna_file": options["mirna_file"],
                 "lncrna_file": options["lncrna_file"],
+                "circrna_file": options["circrna_file"],
                 "meta_file": options["meta_file"],
                 "logfc_cutoff_mrna": options["logfc_cutoff_mrna"],
                 "padj_cutoff_mrna": options["padj_cutoff_mrna"],
@@ -204,6 +229,8 @@ class Command(BaseCommand):
                 "padj_cutoff_mirna": options["padj_cutoff_mirna"],
                 "logfc_cutoff_lncrna": options["logfc_cutoff_lncrna"],
                 "padj_cutoff_lncrna": options["padj_cutoff_lncrna"],
+                "logfc_cutoff_circrna": options["logfc_cutoff_circrna"],
+                "padj_cutoff_circrna": options["padj_cutoff_circrna"],
             },
         )
 
@@ -230,6 +257,7 @@ class Command(BaseCommand):
         self.stdout.write(f"mrna_file: {task.mrna_file}")
         self.stdout.write(f"mirna_file: {task.mirna_file}")
         self.stdout.write(f"lncrna_file: {task.lncrna_file}")
+        self.stdout.write(f"circrna_file: {task.circrna_file}")
         self.stdout.write(f"meta_file: {task.meta_file}")
         self.stdout.write(f"logfc_cutoff_mrna: {task.logfc_cutoff_mrna}")
         self.stdout.write(f"padj_cutoff_mrna: {task.padj_cutoff_mrna}")
@@ -237,6 +265,8 @@ class Command(BaseCommand):
         self.stdout.write(f"padj_cutoff_mirna: {task.padj_cutoff_mirna}")
         self.stdout.write(f"logfc_cutoff_lncrna: {task.logfc_cutoff_lncrna}")
         self.stdout.write(f"padj_cutoff_lncrna: {task.padj_cutoff_lncrna}")
+        self.stdout.write(f"logfc_cutoff_circrna: {task.logfc_cutoff_circrna}")
+        self.stdout.write(f"padj_cutoff_circrna: {task.padj_cutoff_circrna}")
         self.stdout.write(f"workspace: {task.get_workspace_dir_absolute_path()}")
         self.stdout.write(f"input_dir: {task.get_input_dir_absolute_path()}")
         self.stdout.write(f"output_dir: {task.get_output_dir_absolute_path()}")

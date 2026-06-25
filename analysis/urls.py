@@ -47,4 +47,10 @@ urlpatterns = [
          name='custom_list_query_run_demo'),
     path('paired_cohort_run_demo/', workflow_demo_view.PairedCohortDemoRunView.as_view(),
          name='paired_cohort_run_demo'),
+    path('paired_cohort_axis_final/', workflow_detail_views.PairedCohortAxisFinalDataView.as_view(),
+         name='paired_cohort_axis_final'),
+    path('paired_cohort_survival_km/', workflow_detail_views.PairedCohortSurvivalKMDataView.as_view(),
+         name='paired_cohort_survival_km'),
+    path('hybrid_reference_task_submit/', workflow_submit_views.HybridReferenceTaskSubmitView.as_view(),
+         name='hybrid_reference_task_submit'),
 ]

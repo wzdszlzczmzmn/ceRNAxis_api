@@ -1,8 +1,10 @@
 from pathlib import Path
 import csv
+import math
 
 import pandas as pd
-
+from lifelines import KaplanMeierFitter
+from lifelines.statistics import logrank_test
 
 PAIRED_COHORT_ALLOWED_FILE_FIELDS = [
     "mrna_file",
@@ -36,6 +38,34 @@ PAIRED_COHORT_CASE_LABEL = "case"
 PAIRED_COHORT_CORRELATION_FILENAME_SUFFIX = "_ceRNA_corr.csv"
 
 
+PAIRED_COHORT_DEG_RNA_TYPES = [
+    "mRNA",
+    "miRNA",
+    "lncRNA",
+    "circRNA",
+]
+
+
+# Background result file.
+PAIRED_COHORT_BACKGROUND_FILENAME_SUFFIX = "_ceRNA_background.csv"
+
+PAIRED_COHORT_VALID_BACKGROUND_TYPES = [
+    "miRNA-mRNA",
+    "miRNA-lncRNA",
+    "miRNA-circRNA",
+]
+
+PAIRED_COHORT_BACKGROUND_REQUIRED_COLUMNS = {
+    "miRNA",
+    "ceRNA",
+    "species",
+    "database",
+    "type",
+    "miRNA_log2FC",
+    "ceRNA_log2FC",
+}
+
+
 # Correlation result file.
 PAIRED_COHORT_VALID_CORRELATION_TYPES = [
     "miRNA-mRNA",
@@ -66,6 +96,47 @@ PAIRED_COHORT_TYPE_FILE_FIELD_MAP = {
         "gene2_file": "mrna_file",
     },
 }
+
+
+# ceRNA axis final result file.
+PAIRED_COHORT_AXIS_FINAL_FILENAME_SUFFIX = "_ceRNA_axis_final.csv"
+
+PAIRED_COHORT_AXIS_FINAL_COLUMNS = [
+    "axis_id",
+    "axis_regulation",
+    "axis_type",
+    "mRNA",
+    "mRNA_log2FC",
+    "mRNA_regulation",
+    "miRNA",
+    "miRNA_log2FC",
+    "miRNA_regulation",
+    "lncRNA",
+    "lncRNA_log2FC",
+    "lncRNA_regulation",
+    "circRNA",
+    "circRNA_log2FC",
+    "circRNA_regulation",
+]
+
+PAIRED_COHORT_AXIS_FINAL_REQUIRED_COLUMNS = set(
+    PAIRED_COHORT_AXIS_FINAL_COLUMNS
+)
+
+
+# Survival analysis result file.
+PAIRED_COHORT_SURVIVAL_FILENAME_SUFFIX = "_survival_analysis.csv"
+
+PAIRED_COHORT_SURVIVAL_REQUIRED_COLUMNS = {
+    "n_os",
+    "c_os_status",
+    "ceRNA_cluster",
+}
+
+PAIRED_COHORT_SURVIVAL_GROUPS = [
+    "Cluster_1",
+    "Cluster_2",
+]
 
 
 class PairedCohortTaskInputError(ValueError):
@@ -300,6 +371,147 @@ def validate_paired_cohort_file_contents(task) -> dict:
     return input_files
 
 
+def get_paired_cohort_deg_file_path(task, rna_type: str) -> Path:
+    rna_type = str(rna_type).strip()
+
+    if rna_type not in PAIRED_COHORT_DEG_RNA_TYPES:
+        raise PairedCohortTaskPathError(
+            "Invalid DEG rna_type. Allowed values are: "
+            f"{', '.join(PAIRED_COHORT_DEG_RNA_TYPES)}."
+        )
+
+    task_name = str(task.task_name).strip()
+    deg_method = str(task.deg_method).strip()
+
+    validate_safe_name(task_name, "task_name")
+    validate_safe_name(deg_method, "deg_method")
+
+    output_dir = get_paired_cohort_task_output_dir(task)
+
+    file_path = (
+        output_dir / f"{task_name}_{deg_method}_{rna_type}.csv"
+    ).resolve()
+
+    if not str(file_path).startswith(str(output_dir)):
+        raise PairedCohortTaskPathError(
+            "Invalid paired cohort DEG file path."
+        )
+
+    return file_path
+
+
+def get_available_paired_cohort_deg_rna_types(task) -> list[str]:
+    output_dir = get_paired_cohort_task_output_dir(task)
+
+    if not output_dir.exists() or not output_dir.is_dir():
+        return []
+
+    available_rna_types = []
+
+    for rna_type in PAIRED_COHORT_DEG_RNA_TYPES:
+        file_path = get_paired_cohort_deg_file_path(
+            task=task,
+            rna_type=rna_type,
+        )
+
+        if file_path.exists() and file_path.is_file():
+            available_rna_types.append(rna_type)
+
+    return available_rna_types
+
+
+def get_paired_cohort_background_file_path(task) -> Path:
+    task_name = str(task.task_name).strip()
+
+    validate_safe_name(task_name, "task_name")
+
+    output_dir = get_paired_cohort_task_output_dir(task)
+
+    file_path = (
+        output_dir / f"{task_name}{PAIRED_COHORT_BACKGROUND_FILENAME_SUFFIX}"
+    ).resolve()
+
+    if not str(file_path).startswith(str(output_dir)):
+        raise PairedCohortTaskPathError(
+            "Invalid paired cohort ceRNA background file path."
+        )
+
+    return file_path
+
+
+def validate_paired_cohort_background_file(task) -> Path:
+    file_path = get_paired_cohort_background_file_path(task)
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"Paired cohort ceRNA background file not found: {file_path.name}"
+        )
+
+    return file_path
+
+
+def read_paired_cohort_background_file(task) -> tuple[Path, pd.DataFrame]:
+    file_path = validate_paired_cohort_background_file(task)
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as e:
+        raise PairedCohortTaskInputError(
+            f"Failed to read paired cohort ceRNA background file: {str(e)}"
+        )
+
+    missing_columns = PAIRED_COHORT_BACKGROUND_REQUIRED_COLUMNS - set(df.columns)
+
+    if missing_columns:
+        raise PairedCohortTaskInputError(
+            "Paired cohort ceRNA background file is missing required column(s): "
+            f"{', '.join(sorted(missing_columns))}."
+        )
+
+    return file_path, df
+
+
+def normalize_paired_cohort_background_dataframe(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    normalized_df = df.copy()
+
+    for col in ["miRNA", "ceRNA", "species", "database", "type"]:
+        if col in normalized_df.columns:
+            normalized_df[col] = normalized_df[col].astype(str).str.strip()
+
+    return normalized_df
+
+
+def get_paired_cohort_available_background_types(
+    df: pd.DataFrame,
+) -> list[str]:
+    normalized_df = normalize_paired_cohort_background_dataframe(df)
+
+    observed_types = set(
+        normalized_df["type"]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .tolist()
+    )
+
+    return [
+        type_value
+        for type_value in PAIRED_COHORT_VALID_BACKGROUND_TYPES
+        if type_value in observed_types
+    ]
+
+
+def get_available_paired_cohort_background_types(task) -> list[str]:
+    try:
+        _, df = read_paired_cohort_background_file(task)
+    except (FileNotFoundError, PairedCohortTaskInputError):
+        return []
+
+    return get_paired_cohort_available_background_types(df)
+
+
 def get_paired_cohort_correlation_file_path(task) -> Path:
     task_name = str(task.task_name).strip()
 
@@ -449,7 +661,322 @@ def safe_float_or_none(value):
     except (TypeError, ValueError):
         return None
 
-    if pd.isna(result):
+    if pd.isna(result) or not math.isfinite(result):
         return None
 
     return result
+
+
+def get_paired_cohort_axis_final_file_path(task) -> Path:
+    task_name = str(task.task_name).strip()
+
+    validate_safe_name(task_name, "task_name")
+
+    output_dir = get_paired_cohort_task_output_dir(task)
+
+    file_path = (
+        output_dir / f"{task_name}{PAIRED_COHORT_AXIS_FINAL_FILENAME_SUFFIX}"
+    ).resolve()
+
+    if not str(file_path).startswith(str(output_dir)):
+        raise PairedCohortTaskPathError(
+            "Invalid paired cohort ceRNA axis final file path."
+        )
+
+    return file_path
+
+
+def validate_paired_cohort_axis_final_file(task) -> Path:
+    file_path = get_paired_cohort_axis_final_file_path(task)
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"Paired cohort ceRNA axis final file not found: {file_path.name}"
+        )
+
+    return file_path
+
+
+def read_paired_cohort_axis_final_file(task) -> tuple[Path, pd.DataFrame]:
+    file_path = validate_paired_cohort_axis_final_file(task)
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as e:
+        raise PairedCohortTaskInputError(
+            f"Failed to read paired cohort ceRNA axis final file: {str(e)}"
+        )
+
+    missing_columns = PAIRED_COHORT_AXIS_FINAL_REQUIRED_COLUMNS - set(df.columns)
+
+    if missing_columns:
+        raise PairedCohortTaskInputError(
+            "Paired cohort ceRNA axis final file is missing required column(s): "
+            f"{', '.join(sorted(missing_columns))}."
+        )
+
+    return file_path, df
+
+
+def normalize_paired_cohort_axis_final_dataframe(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    normalized_df = df.copy()
+
+    for col in PAIRED_COHORT_AXIS_FINAL_COLUMNS:
+        if col not in normalized_df.columns:
+            continue
+
+        if col.endswith("_log2FC"):
+            normalized_df[col] = pd.to_numeric(
+                normalized_df[col],
+                errors="coerce",
+            )
+        else:
+            normalized_df[col] = normalized_df[col].astype("object")
+
+    normalized_df = normalized_df.replace([float("inf"), float("-inf")], pd.NA)
+
+    return normalized_df[PAIRED_COHORT_AXIS_FINAL_COLUMNS]
+
+
+def get_paired_cohort_survival_file_path(task) -> Path:
+    task_name = str(task.task_name).strip()
+
+    validate_safe_name(task_name, "task_name")
+
+    output_dir = get_paired_cohort_task_output_dir(task)
+
+    file_path = (
+        output_dir / f"{task_name}{PAIRED_COHORT_SURVIVAL_FILENAME_SUFFIX}"
+    ).resolve()
+
+    if not str(file_path).startswith(str(output_dir)):
+        raise PairedCohortTaskPathError(
+            "Invalid paired cohort survival analysis file path."
+        )
+
+    return file_path
+
+
+def validate_paired_cohort_survival_file(task) -> Path:
+    file_path = get_paired_cohort_survival_file_path(task)
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"Paired cohort survival analysis file not found: {file_path.name}"
+        )
+
+    return file_path
+
+
+def read_paired_cohort_survival_file(task) -> tuple[Path, pd.DataFrame]:
+    file_path = validate_paired_cohort_survival_file(task)
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as e:
+        raise PairedCohortTaskInputError(
+            f"Failed to read paired cohort survival analysis file: {str(e)}"
+        )
+
+    missing_columns = PAIRED_COHORT_SURVIVAL_REQUIRED_COLUMNS - set(df.columns)
+
+    if missing_columns:
+        raise PairedCohortTaskInputError(
+            "Paired cohort survival analysis file is missing required column(s): "
+            f"{', '.join(sorted(missing_columns))}."
+        )
+
+    return file_path, df
+
+
+def normalize_paired_cohort_survival_dataframe(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    normalized_df = df.copy()
+
+    normalized_df["n_os"] = pd.to_numeric(
+        normalized_df["n_os"],
+        errors="coerce",
+    )
+
+    normalized_df["c_os_status"] = pd.to_numeric(
+        normalized_df["c_os_status"],
+        errors="coerce",
+    )
+
+    normalized_df["ceRNA_cluster"] = (
+        normalized_df["ceRNA_cluster"]
+        .astype(str)
+        .str.strip()
+    )
+
+    normalized_df = normalized_df.dropna(
+        subset=[
+            "n_os",
+            "c_os_status",
+            "ceRNA_cluster",
+        ]
+    ).copy()
+
+    normalized_df = normalized_df[
+        normalized_df["ceRNA_cluster"].isin(PAIRED_COHORT_SURVIVAL_GROUPS)
+    ].copy()
+
+    normalized_df = normalized_df[
+        normalized_df["n_os"] >= 0
+    ].copy()
+
+    normalized_df = normalized_df[
+        normalized_df["c_os_status"].isin([0, 1])
+    ].copy()
+
+    normalized_df["c_os_status"] = normalized_df["c_os_status"].astype(int)
+
+    return normalized_df
+
+
+def dataframe_to_km_points(
+    survival_df: pd.DataFrame,
+    time_col: str,
+    value_col: str,
+) -> list[dict]:
+    points = []
+
+    for _, row in survival_df.iterrows():
+        time_value = safe_float_or_none(row.get(time_col))
+        survival_value = safe_float_or_none(row.get(value_col))
+
+        if time_value is None or survival_value is None:
+            continue
+
+        points.append(
+            {
+                "time": time_value,
+                "survival": survival_value,
+            }
+        )
+
+    return points
+
+
+def build_single_km_group_data(
+    group_name: str,
+    group_df: pd.DataFrame,
+) -> dict | None:
+    if group_df.empty:
+        return None
+
+    kmf = KaplanMeierFitter()
+
+    kmf.fit(
+        durations=group_df["n_os"],
+        event_observed=group_df["c_os_status"],
+        label=group_name,
+    )
+
+    survival_df = kmf.survival_function_.reset_index()
+    survival_time_col = survival_df.columns[0]
+    survival_value_col = survival_df.columns[1]
+
+    ci_df = kmf.confidence_interval_survival_function_.reset_index()
+    ci_time_col = ci_df.columns[0]
+    ci_lower_col = ci_df.columns[1]
+    ci_upper_col = ci_df.columns[2]
+
+    return {
+        "name": group_name,
+        "n": int(group_df.shape[0]),
+        "event_count": int(group_df["c_os_status"].sum()),
+        "censored_count": int(group_df.shape[0] - group_df["c_os_status"].sum()),
+        "points": dataframe_to_km_points(
+            survival_df=survival_df,
+            time_col=survival_time_col,
+            value_col=survival_value_col,
+        ),
+        "ci_lower": dataframe_to_km_points(
+            survival_df=ci_df,
+            time_col=ci_time_col,
+            value_col=ci_lower_col,
+        ),
+        "ci_upper": dataframe_to_km_points(
+            survival_df=ci_df,
+            time_col=ci_time_col,
+            value_col=ci_upper_col,
+        ),
+    }
+
+
+def calculate_paired_cohort_logrank_p_value(
+    surv_df: pd.DataFrame,
+) -> float | None:
+    group_1_df = surv_df[
+        surv_df["ceRNA_cluster"] == "Cluster_1"
+    ]
+
+    group_2_df = surv_df[
+        surv_df["ceRNA_cluster"] == "Cluster_2"
+    ]
+
+    if group_1_df.empty or group_2_df.empty:
+        return None
+
+    try:
+        result = logrank_test(
+            group_1_df["n_os"],
+            group_2_df["n_os"],
+            event_observed_A=group_1_df["c_os_status"],
+            event_observed_B=group_2_df["c_os_status"],
+        )
+    except Exception:
+        return None
+
+    return safe_float_or_none(result.p_value)
+
+
+def build_paired_cohort_survival_km_data(
+    task,
+    title: str = "ceRNA axis-based survival analysis",
+) -> dict:
+    survival_file, df = read_paired_cohort_survival_file(task)
+
+    surv_df = normalize_paired_cohort_survival_dataframe(df)
+
+    raw_count = int(df.shape[0])
+    cleaned_count = int(surv_df.shape[0])
+    dropped_count = raw_count - cleaned_count
+
+    groups = []
+
+    for group_name in PAIRED_COHORT_SURVIVAL_GROUPS:
+        group_df = surv_df[
+            surv_df["ceRNA_cluster"] == group_name
+        ].copy()
+
+        group_data = build_single_km_group_data(
+            group_name=group_name,
+            group_df=group_df,
+        )
+
+        if group_data is not None:
+            groups.append(group_data)
+
+    logrank_p = calculate_paired_cohort_logrank_p_value(surv_df)
+
+    return {
+        "uuid": str(task.uuid),
+        "task_name": task.task_name,
+        "survival_file": survival_file.name,
+        "title": title,
+        "x_label": "Time days",
+        "y_label": "Overall survival probability",
+        "summary": {
+            "raw_count": raw_count,
+            "cleaned_count": cleaned_count,
+            "dropped_count": dropped_count,
+            "group_count": len(groups),
+            "logrank_p": logrank_p,
+        },
+        "groups": groups,
+    }

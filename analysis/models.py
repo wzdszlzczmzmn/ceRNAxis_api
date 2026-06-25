@@ -233,3 +233,118 @@ class PairedCohortTask(models.Model):
             self.get_workspace_dir_absolute_path(),
             "output",
         )
+
+
+class HybridReferenceTask(models.Model):
+    class Status(models.IntegerChoices):
+        Pending = 0, "Pending"
+        Running = 1, "Running"
+        Success = 2, "Success"
+        Failed = 3, "Failed"
+
+    class DEGMethod(models.TextChoices):
+        limma = "limma", "limma"
+        deseq2 = "deseq2", "deseq2"
+
+    class LncRNAType(models.TextChoices):
+        log2count = "log2count", "log2count"
+        log2fpkm = "log2fpkm", "log2fpkm"
+        log2fpkmuq = "log2fpkmuq", "log2fpkmuq"
+        log2tpm = "log2tpm", "log2tpm"
+
+    uuid = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    user = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+    )
+
+    task_name = models.CharField(
+        max_length=255,
+    )
+
+    status = models.IntegerField(
+        choices=Status.choices,
+        default=Status.Pending,
+    )
+
+    tcga_type = models.CharField(
+        max_length=64,
+        db_index=True,
+    )
+
+    lncrna_type = models.CharField(
+        max_length=32,
+        choices=LncRNAType.choices,
+        default=LncRNAType.log2tpm,
+    )
+
+    map_info = models.CharField(
+        max_length=255,
+    )
+
+    deg_method = models.CharField(
+        max_length=32,
+        choices=DEGMethod.choices,
+        default=DEGMethod.limma,
+    )
+
+    mrna_file = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    meta_file = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    logfc_cutoff_mrna = models.FloatField(default=1.0)
+    padj_cutoff_mrna = models.FloatField(default=0.05)
+
+    create_time = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    finish_time = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "hybrid_reference_task"
+        ordering = ["-create_time"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["tcga_type"]),
+            models.Index(fields=["create_time"]),
+        ]
+
+    def __str__(self):
+        return f"{self.task_name} ({self.uuid})"
+
+    def get_workspace_dir_absolute_path(self):
+        return os.path.join(
+            settings.WORKSPACE_HOME,
+            str(self.uuid),
+        )
+
+    def get_input_dir_absolute_path(self):
+        return os.path.join(
+            self.get_workspace_dir_absolute_path(),
+            "input",
+        )
+
+    def get_output_dir_absolute_path(self):
+        return os.path.join(
+            self.get_workspace_dir_absolute_path(),
+            "output",
+        )

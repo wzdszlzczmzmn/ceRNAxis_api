@@ -1,8 +1,11 @@
 import subprocess
 
-from analysis.models import CustomListQueryTask, PairedCohortTask
+from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
 from analysis.utils.custom_list_query_task_utils import validate_task_mirna_axis_file, get_task_output_dir, \
     get_task_out_prefix
+from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_input_files, \
+    get_hybrid_reference_task_output_dir, HYBRID_REFERENCE_VALID_TCGA_TYPES, HYBRID_REFERENCE_VALID_LNCRNA_TYPES, \
+    HYBRID_REFERENCE_VALID_DEG_METHODS
 from analysis.utils.immune_annotation_path_utils import validate_immune_annotation_file
 from analysis.utils.paired_cohort_task_utils import validate_paired_cohort_input_files, \
     get_paired_cohort_task_output_dir
@@ -11,6 +14,7 @@ from analysis.utils.slurm_path_utils import validate_slurm_script, get_pipeline_
 
 CUSTOM_LIST_QUERY_SLURM_SCRIPT = "submit_custom_list_query_task.sh"
 PAIRED_COHORT_SLURM_SCRIPT = "submit_paired_cohort_task.sh"
+HYBRID_REFERENCE_SLURM_SCRIPT = "submit_hybrid_reference_task.sh"
 
 
 def sbatch_custom_list_query_task(task_uuid) -> dict:
@@ -192,6 +196,127 @@ def sbatch_paired_cohort_task(task_uuid) -> dict:
         str(task.padj_cutoff_lncrna),
         str(task.logfc_cutoff_circrna),
         str(task.padj_cutoff_circrna),
+        task.deg_method,
+        str(map_info_file),
+    ]
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        return {
+            "success": False,
+            "msg": "Failed to submit SLURM job.",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "command": command,
+        }
+
+    return {
+        "success": True,
+        "msg": "SLURM job submitted successfully.",
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "command": command,
+    }
+
+
+def sbatch_hybrid_reference_task(task_uuid) -> dict:
+    """
+    Submit HybridReferenceTask to SLURM.
+
+    Expected SLURM script arguments:
+        1. uuid
+        2. dataset
+        3. mrna_file
+        4. meta_file
+        5. tcga_type
+        6. lncrna_type
+        7. outdir
+        8. logfc_cutoff_mrna
+        9. padj_cutoff_mrna
+        10. deg_method
+        11. map_info_csv
+    """
+
+    try:
+        task = HybridReferenceTask.objects.get(uuid=task_uuid)
+    except HybridReferenceTask.DoesNotExist:
+        return {
+            "success": False,
+            "msg": f"HybridReferenceTask not found: {task_uuid}",
+            "stdout": "",
+            "stderr": "",
+        }
+
+    try:
+        script_path = validate_slurm_script(
+            HYBRID_REFERENCE_SLURM_SCRIPT
+        )
+
+        map_info_file = validate_immune_annotation_file(
+            task.map_info
+        )
+
+        input_files = validate_hybrid_reference_input_files(
+            task
+        )
+
+        output_dir = get_hybrid_reference_task_output_dir(task)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        stdout_file = get_pipeline_stdout_file_path(output_dir)
+        stderr_file = get_pipeline_stderr_file_path(output_dir)
+
+        dataset = str(task.task_name).strip()
+
+        if not dataset:
+            raise ValueError("Missing task_name for hybrid reference task.")
+
+        if task.tcga_type not in HYBRID_REFERENCE_VALID_TCGA_TYPES:
+            raise ValueError(
+                "Invalid tcga_type. Allowed values are: "
+                f"{', '.join(HYBRID_REFERENCE_VALID_TCGA_TYPES)}."
+            )
+
+        if task.lncrna_type not in HYBRID_REFERENCE_VALID_LNCRNA_TYPES:
+            raise ValueError(
+                "Invalid lncrna_type. Allowed values are: "
+                f"{', '.join(HYBRID_REFERENCE_VALID_LNCRNA_TYPES)}."
+            )
+
+        if task.deg_method not in HYBRID_REFERENCE_VALID_DEG_METHODS:
+            raise ValueError(
+                "Invalid deg_method. Allowed values are: "
+                f"{', '.join(HYBRID_REFERENCE_VALID_DEG_METHODS)}."
+            )
+
+    except Exception as e:
+        return {
+            "success": False,
+            "msg": str(e),
+            "stdout": "",
+            "stderr": "",
+        }
+
+    command = [
+        "sbatch",
+        f"--job-name={get_slurm_job_name(task.uuid)}",
+        f"--output={stdout_file}",
+        f"--error={stderr_file}",
+        str(script_path),
+        str(task.uuid),
+        dataset,
+        str(input_files["mrna_file"]),
+        str(input_files["meta_file"]),
+        task.tcga_type,
+        task.lncrna_type,
+        str(output_dir),
+        str(task.logfc_cutoff_mrna),
+        str(task.padj_cutoff_mrna),
         task.deg_method,
         str(map_info_file),
     ]

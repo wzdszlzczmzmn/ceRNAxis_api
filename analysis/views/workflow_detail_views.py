@@ -26,7 +26,10 @@ from analysis.utils.paired_cohort_task_utils import PAIRED_COHORT_INPUT_FILENAME
     read_paired_cohort_correlation_file, get_paired_cohort_available_correlation_pairs, PairedCohortTaskInputError, \
     PAIRED_COHORT_VALID_CORRELATION_TYPES, normalize_paired_cohort_correlation_dataframe, \
     get_paired_cohort_exp_file_fields_by_type, PAIRED_COHORT_EXPR_SAMPLE_COL, PAIRED_COHORT_META_SAMPLE_COL, \
-    PAIRED_COHORT_GROUP_COL, PAIRED_COHORT_CASE_LABEL, extract_paired_cohort_correlation_stats
+    PAIRED_COHORT_GROUP_COL, PAIRED_COHORT_CASE_LABEL, extract_paired_cohort_correlation_stats, \
+    read_paired_cohort_background_file, get_paired_cohort_available_background_types, \
+    read_paired_cohort_axis_final_file, normalize_paired_cohort_axis_final_dataframe, PAIRED_COHORT_AXIS_FINAL_COLUMNS, \
+    build_paired_cohort_survival_km_data
 from analysis.utils.workflow_network_utils import immune_gene_node_key, normalize_rna_name, \
     append_immune_annotation_to_edge, immune_edge_id, edge_pair_key, format_immune_evidence_item, \
     mark_node_as_immune_related, to_float_or_none, is_valid_uuid
@@ -415,15 +418,15 @@ class CustomListQueryTaskNetworkView(APIView):
         return edge_count
 
     def add_immune_annotation_edges(
-        self,
-        task,
-        input_mirna_name_map,
-        nodes,
-        edges,
-        edge_pair_index,
-        used_node_keys,
-        matched_node_map,
-        matched_node_name_map,
+            self,
+            task,
+            input_mirna_name_map,
+            nodes,
+            edges,
+            edge_pair_index,
+            used_node_keys,
+            matched_node_map,
+            matched_node_name_map,
     ) -> dict:
         immune_file_path = self.get_immune_result_file_path(task)
 
@@ -935,7 +938,7 @@ class PairedCohortDEGVolcanoView(APIView):
         "regulation",
     }
 
-    VALID_RNA_TYPES = ["mRNA", "miRNA", "lncRNA"]
+    VALID_RNA_TYPES = ["mRNA", "miRNA", "lncRNA", "circRNA"]
 
     VALID_REGULATION_GROUPS = ["NotSig", "Down", "Up"]
 
@@ -1136,7 +1139,7 @@ class PairedCohortDEGVolcanoView(APIView):
 
 
 class PairedCohortLog2FCCorrelationView(APIView):
-        """
+    """
         Return core data for log2FC correlation plot.
 
         Query params:
@@ -1147,246 +1150,227 @@ class PairedCohortLog2FCCorrelationView(APIView):
             {task_name}_ceRNA_background.csv
         """
 
-        REQUIRED_COLUMNS = {
+    REQUIRED_COLUMNS = {
+        "miRNA",
+        "ceRNA",
+        "species",
+        "database",
+        "type",
+        "miRNA_log2FC",
+        "ceRNA_log2FC",
+    }
+
+    X_COL = "ceRNA_log2FC"
+    Y_COL = "miRNA_log2FC"
+
+    def get(self, request):
+        try:
+            task_uuid = str(request.query_params.get("taskUUID", "")).strip()
+            requested_type = request.query_params.get("type", None)
+
+            type_value = (
+                str(requested_type).strip()
+                if requested_type is not None
+                else ""
+            )
+
+            if not task_uuid:
+                return Response(
+                    {"detail": "Missing query parameter: taskUUID."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                uuid_lib.UUID(task_uuid)
+            except ValueError:
+                return Response(
+                    {"detail": "Invalid Task UUID format."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                task = PairedCohortTask.objects.get(uuid=task_uuid)
+            except PairedCohortTask.DoesNotExist:
+                return Response(
+                    {
+                        "detail": f"PairedCohortTask not found: {task_uuid}."
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if task.status != PairedCohortTask.Status.Success:
+                return Response(
+                    {
+                        "detail": (
+                            "Paired cohort task is not completed successfully. "
+                            f"Current status: {task.get_status_display()}."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                background_file, df = read_paired_cohort_background_file(task)
+            except PairedCohortTaskPathError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except FileNotFoundError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except PairedCohortTaskInputError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            available_types = get_paired_cohort_available_background_types(df)
+
+            if not available_types:
+                return Response(
+                    {
+                        "detail": (
+                            "No supported background interaction type found "
+                            "in ceRNA background file."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not type_value:
+                type_value = available_types[0]
+
+            if type_value not in available_types:
+                return Response(
+                    {
+                        "detail": (
+                            "Invalid type for this task. Allowed values are: "
+                            f"{', '.join(available_types)}."
+                        ),
+                        "available_types": available_types,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            result = self.build_response_data(
+                task=task,
+                df=df,
+                type_value=type_value,
+                background_file_name=background_file.name,
+                available_types=available_types,
+            )
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {"detail": f"Server error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+    def build_response_data(
+            self,
+            task,
+            df: pd.DataFrame,
+            type_value: str,
+            background_file_name: str,
+            available_types: list[str],
+    ) -> dict:
+        x_col = self.X_COL
+        y_col = self.Y_COL
+
+        df = df[df["type"] == type_value].copy()
+
+        raw_count = int(df.shape[0])
+
+        df[x_col] = pd.to_numeric(df[x_col], errors="coerce")
+        df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
+
+        required_subset = [
             "miRNA",
             "ceRNA",
-            "species",
-            "database",
             "type",
-            "miRNA_log2FC",
-            "ceRNA_log2FC",
-        }
-
-        VALID_TYPES = [
-            "miRNA-mRNA",
-            "miRNA-lncRNA",
+            x_col,
+            y_col,
         ]
 
-        X_COL = "ceRNA_log2FC"
-        Y_COL = "miRNA_log2FC"
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(subset=required_subset).copy()
 
-        def get(self, request):
-            try:
-                task_uuid = str(request.query_params.get("taskUUID", "")).strip()
-                type_value = str(
-                    request.query_params.get("type", "miRNA-mRNA")
-                ).strip()
+        cleaned_count = int(df.shape[0])
+        dropped_count = raw_count - cleaned_count
 
-                if not task_uuid:
-                    return Response(
-                        {"detail": "Missing query parameter: taskUUID."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                try:
-                    uuid_lib.UUID(task_uuid)
-                except ValueError:
-                    return Response(
-                        {"detail": "Invalid Task UUID format."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                if type_value not in self.VALID_TYPES:
-                    return Response(
-                        {
-                            "detail": (
-                                "Invalid type. Allowed values are: "
-                                f"{', '.join(self.VALID_TYPES)}."
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                try:
-                    task = PairedCohortTask.objects.get(uuid=task_uuid)
-                except PairedCohortTask.DoesNotExist:
-                    return Response(
-                        {
-                            "detail": f"PairedCohortTask not found: {task_uuid}."
-                        },
-                        status=status.HTTP_404_NOT_FOUND,
-                    )
-
-                if task.status != PairedCohortTask.Status.Success:
-                    return Response(
-                        {
-                            "detail": (
-                                "Paired cohort task is not completed successfully. "
-                                f"Current status: {task.get_status_display()}."
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                try:
-                    background_file = self.get_background_file_path(task)
-                except PairedCohortTaskPathError as e:
-                    return Response(
-                        {"detail": str(e)},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                if not background_file.exists() or not background_file.is_file():
-                    return Response(
-                        {
-                            "detail": (
-                                "ceRNA background file not found: "
-                                f"{background_file.name}."
-                            )
-                        },
-                        status=status.HTTP_404_NOT_FOUND,
-                    )
-
-                try:
-                    df = pd.read_csv(background_file)
-                except Exception as e:
-                    return Response(
-                        {"detail": f"Failed to read ceRNA background file: {e}"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
-
-                missing_columns = self.REQUIRED_COLUMNS - set(df.columns)
-
-                if missing_columns:
-                    return Response(
-                        {
-                            "detail": (
-                                "Missing required columns: "
-                                f"{sorted(missing_columns)}"
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                result = self.build_response_data(
-                    task=task,
-                    df=df,
-                    type_value=type_value,
-                    background_file_name=background_file.name,
-                )
-
-                return Response(result, status=status.HTTP_200_OK)
-
-            except Exception as e:
-                print(traceback.format_exc())
-
-                return Response(
-                    {"detail": f"Server error: {str(e)}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-        @staticmethod
-        def get_background_file_path(task):
-            task_name = str(task.task_name).strip()
-
-            validate_safe_name(task_name, "task_name")
-
-            output_dir = get_paired_cohort_task_output_dir(task)
-
-            filename = f"{task_name}_ceRNA_background.csv"
-            file_path = (output_dir / filename).resolve()
-
-            if not str(file_path).startswith(str(output_dir)):
-                raise PairedCohortTaskPathError(
-                    "Invalid paired cohort ceRNA background file path."
-                )
-
-            return file_path
-
-        def build_response_data(
-                self,
-                task,
-                df: pd.DataFrame,
-                type_value: str,
-                background_file_name: str,
-        ) -> dict:
-            x_col = self.X_COL
-            y_col = self.Y_COL
-
-            df = df[df["type"] == type_value].copy()
-
-            raw_count = int(df.shape[0])
-
-            df[x_col] = pd.to_numeric(df[x_col], errors="coerce")
-            df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
-
-            required_subset = [
-                "miRNA",
-                "ceRNA",
-                "type",
-                x_col,
-                y_col,
-            ]
-
-            df = df.replace([np.inf, -np.inf], np.nan)
-            df = df.dropna(subset=required_subset).copy()
-
-            cleaned_count = int(df.shape[0])
-            dropped_count = raw_count - cleaned_count
-
-            if cleaned_count == 0:
-                return {
-                    "uuid": str(task.uuid),
-                    "task_name": task.task_name,
-                    "type": type_value,
-                    "background_file": background_file_name,
-                    "summary": {
-                        "raw_count": raw_count,
-                        "cleaned_count": 0,
-                        "dropped_count": dropped_count,
-                        "anti_count": 0,
-                        "same_count": 0,
-                    },
-                    "points": [],
-                }
-
-            df["anti_correlation"] = df[x_col] * df[y_col] < 0
-
-            anti_count = int(df["anti_correlation"].sum())
-            same_count = cleaned_count - anti_count
-
+        if cleaned_count == 0:
             return {
                 "uuid": str(task.uuid),
                 "task_name": task.task_name,
                 "type": type_value,
+                "available_types": available_types,
                 "background_file": background_file_name,
                 "summary": {
                     "raw_count": raw_count,
-                    "cleaned_count": cleaned_count,
+                    "cleaned_count": 0,
                     "dropped_count": dropped_count,
-                    "anti_count": anti_count,
-                    "same_count": same_count,
+                    "anti_count": 0,
+                    "same_count": 0,
                 },
-                "points": self.serialize_points(df),
+                "points": [],
             }
 
-        def serialize_points(self, df: pd.DataFrame) -> list[dict]:
-            points = []
+        df["anti_correlation"] = df[x_col] * df[y_col] < 0
 
-            for _, row in df.iterrows():
-                species = row.get("species", "")
-                database = row.get("database", "")
+        anti_count = int(df["anti_correlation"].sum())
+        same_count = cleaned_count - anti_count
 
-                if pd.isna(species):
-                    species = ""
+        return {
+            "uuid": str(task.uuid),
+            "task_name": task.task_name,
+            "type": type_value,
+            "available_types": available_types,
+            "background_file": background_file_name,
+            "summary": {
+                "raw_count": raw_count,
+                "cleaned_count": cleaned_count,
+                "dropped_count": dropped_count,
+                "anti_count": anti_count,
+                "same_count": same_count,
+            },
+            "points": self.serialize_points(df),
+        }
 
-                if pd.isna(database):
-                    database = ""
+    def serialize_points(self, df: pd.DataFrame) -> list[dict]:
+        points = []
 
-                points.append(
-                    {
-                        "miRNA": row["miRNA"],
-                        "ceRNA": row["ceRNA"],
-                        "species": species,
-                        "database": database,
-                        "type": row["type"],
-                        "ceRNA_log2FC": float(row[self.X_COL]),
-                        "miRNA_log2FC": float(row[self.Y_COL]),
-                        "anti_correlation": bool(row["anti_correlation"]),
-                    }
-                )
+        for _, row in df.iterrows():
+            species = row.get("species", "")
+            database = row.get("database", "")
 
-            return points
+            if pd.isna(species):
+                species = ""
+
+            if pd.isna(database):
+                database = ""
+
+            points.append(
+                {
+                    "miRNA": row["miRNA"],
+                    "ceRNA": row["ceRNA"],
+                    "species": species,
+                    "database": database,
+                    "type": row["type"],
+                    "ceRNA_log2FC": float(row[self.X_COL]),
+                    "miRNA_log2FC": float(row[self.Y_COL]),
+                    "anti_correlation": bool(row["anti_correlation"]),
+                }
+            )
+
+        return points
 
 
 class PairedCohortExpCorrelationOptionsView(APIView):
@@ -1589,12 +1573,12 @@ class PairedCohortExpCorrelationPlotDataView(APIView):
 
     @staticmethod
     def build_plot_data(
-        task,
-        cor_df: pd.DataFrame,
-        gene1: str,
-        gene2: str,
-        type_value: str,
-        correlation_file_name: str,
+            task,
+            cor_df: pd.DataFrame,
+            gene1: str,
+            gene2: str,
+            type_value: str,
+            correlation_file_name: str,
     ) -> dict:
         normalized_cor_df = normalize_paired_cohort_correlation_dataframe(cor_df)
 
@@ -1602,7 +1586,7 @@ class PairedCohortExpCorrelationPlotDataView(APIView):
             (normalized_cor_df["gene1"] == gene1)
             & (normalized_cor_df["gene2"] == gene2)
             & (normalized_cor_df["type"] == type_value)
-        ].copy()
+            ].copy()
 
         if pair_df.empty:
             raise ValueError(
@@ -1662,7 +1646,7 @@ class PairedCohortExpCorrelationPlotDataView(APIView):
             meta_df[
                 meta_df[PAIRED_COHORT_GROUP_COL].astype(str).str.strip()
                 == PAIRED_COHORT_CASE_LABEL
-            ]
+                ]
             .index.astype(str)
             .tolist()
         )
@@ -1935,10 +1919,10 @@ class PairedCohortTaskNetworkView(APIView):
         }
 
     def empty_network_response(
-        self,
-        task,
-        ceRNA_axis_file: Path,
-        immune_axis_file: Path,
+            self,
+            task,
+            ceRNA_axis_file: Path,
+            immune_axis_file: Path,
     ) -> dict:
         return {
             "task_type": "PairedCohortTask",
@@ -1969,12 +1953,12 @@ class PairedCohortTaskNetworkView(APIView):
         }
 
     def add_cerna_axis_edges(
-        self,
-        ceRNA_axis_file: Path,
-        nodes: dict,
-        edges: dict,
-        edge_pair_index: dict,
-        node_name_index: dict,
+            self,
+            ceRNA_axis_file: Path,
+            nodes: dict,
+            edges: dict,
+            edge_pair_index: dict,
+            node_name_index: dict,
     ) -> dict:
         edge_count = 0
 
@@ -1989,8 +1973,8 @@ class PairedCohortTaskNetworkView(APIView):
                 }
 
             missing_columns = (
-                PAIRED_COHORT_CERNA_AXIS_REQUIRED_COLUMNS
-                - set(reader.fieldnames)
+                    PAIRED_COHORT_CERNA_AXIS_REQUIRED_COLUMNS
+                    - set(reader.fieldnames)
             )
 
             if missing_columns:
@@ -2120,12 +2104,12 @@ class PairedCohortTaskNetworkView(APIView):
         }
 
     def add_immune_annotation_edges(
-        self,
-        immune_axis_file: Path,
-        nodes: dict,
-        edges: dict,
-        edge_pair_index: dict,
-        node_name_index: dict,
+            self,
+            immune_axis_file: Path,
+            nodes: dict,
+            edges: dict,
+            edge_pair_index: dict,
+            node_name_index: dict,
     ) -> dict:
         if not immune_axis_file.exists() or not immune_axis_file.is_file():
             return {
@@ -2153,8 +2137,8 @@ class PairedCohortTaskNetworkView(APIView):
                 }
 
             missing_columns = (
-                PAIRED_COHORT_IMMUNE_AXIS_REQUIRED_COLUMNS
-                - set(reader.fieldnames)
+                    PAIRED_COHORT_IMMUNE_AXIS_REQUIRED_COLUMNS
+                    - set(reader.fieldnames)
             )
 
             if missing_columns:
@@ -2271,13 +2255,13 @@ class PairedCohortTaskNetworkView(APIView):
         }
 
     def get_or_create_rna_file_node(
-        self,
-        nodes: dict,
-        node_name_index: dict,
-        name: str,
-        rna_type: str,
-        species=None,
-        source: str = "paired_cohort_cerna_axis",
+            self,
+            nodes: dict,
+            node_name_index: dict,
+            name: str,
+            rna_type: str,
+            species=None,
+            source: str = "paired_cohort_cerna_axis",
     ) -> str:
         node_key = paired_cohort_rna_file_node_key(
             name=name,
@@ -2309,10 +2293,10 @@ class PairedCohortTaskNetworkView(APIView):
         return node_key
 
     def get_or_create_immune_target_node(
-        self,
-        nodes: dict,
-        node_name_index: dict,
-        immune_gene: str,
+            self,
+            nodes: dict,
+            node_name_index: dict,
+            immune_gene: str,
     ) -> str:
         normalized_name = normalize_rna_name(immune_gene)
 
@@ -2350,8 +2334,8 @@ class PairedCohortTaskNetworkView(APIView):
 
     @staticmethod
     def choose_preferred_existing_node(
-        nodes: dict,
-        node_keys: list[str],
+            nodes: dict,
+            node_keys: list[str],
     ) -> str:
         preferred_types = [
             "mRNA",
@@ -2471,10 +2455,10 @@ class WorkflowTaskResultDownloadView(APIView):
                 )
 
             except (
-                TaskDownloadError,
-                TaskDownloadConfigNotFoundError,
-                TaskNotFoundError,
-                MultipleTaskMatchedError,
+                    TaskDownloadError,
+                    TaskDownloadConfigNotFoundError,
+                    TaskNotFoundError,
+                    MultipleTaskMatchedError,
             ) as e:
                 return Response(
                     {
@@ -2510,5 +2494,228 @@ class WorkflowTaskResultDownloadView(APIView):
                     "success": False,
                     "msg": f"Server error: {str(e)}",
                 },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PairedCohortAxisFinalDataView(APIView):
+    """
+    Return all rows from paired cohort ceRNA axis final result file.
+
+    Query params:
+        taskUUID: PairedCohortTask UUID
+
+    Input filename:
+        {task_name}_ceRNA_axis_final.csv
+    """
+
+    NUMERIC_COLUMNS = {
+        "mRNA_log2FC",
+        "miRNA_log2FC",
+        "lncRNA_log2FC",
+        "circRNA_log2FC",
+    }
+
+    def get(self, request):
+        try:
+            task_uuid = str(request.query_params.get("taskUUID", "")).strip()
+
+            if not task_uuid:
+                return Response(
+                    {"detail": "Missing query parameter: taskUUID."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                uuid_lib.UUID(task_uuid)
+            except ValueError:
+                return Response(
+                    {"detail": "Invalid Task UUID format."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                task = PairedCohortTask.objects.get(uuid=task_uuid)
+            except PairedCohortTask.DoesNotExist:
+                return Response(
+                    {
+                        "detail": f"PairedCohortTask not found: {task_uuid}."
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if task.status != PairedCohortTask.Status.Success:
+                return Response(
+                    {
+                        "detail": (
+                            "Paired cohort task is not completed successfully. "
+                            f"Current status: {task.get_status_display()}."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                axis_file, df = read_paired_cohort_axis_final_file(task)
+            except PairedCohortTaskPathError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except FileNotFoundError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except PairedCohortTaskInputError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            df = normalize_paired_cohort_axis_final_dataframe(df)
+
+            raw_count = int(df.shape[0])
+
+            results = self.serialize_dataframe(df)
+
+            return Response(
+                {
+                    "uuid": str(task.uuid),
+                    "task_name": task.task_name,
+                    "axis_final_file": axis_file.name,
+                    "count": raw_count,
+                    "columns": PAIRED_COHORT_AXIS_FINAL_COLUMNS,
+                    "results": results,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {"detail": f"Server error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def serialize_dataframe(self, df: pd.DataFrame) -> list[dict]:
+        clean_df = df.replace([np.inf, -np.inf], np.nan)
+
+        records = []
+
+        for _, row in clean_df.iterrows():
+            item = {}
+
+            for col in PAIRED_COHORT_AXIS_FINAL_COLUMNS:
+                value = row.get(col)
+
+                if col in self.NUMERIC_COLUMNS:
+                    item[col] = self.safe_float_or_none(value)
+                else:
+                    item[col] = self.safe_str_or_empty(value)
+
+            records.append(item)
+
+        return records
+
+    @staticmethod
+    def safe_float_or_none(value):
+        if value is None or pd.isna(value):
+            return None
+
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if pd.isna(result) or not np.isfinite(result):
+            return None
+
+        return result
+
+    @staticmethod
+    def safe_str_or_empty(value):
+        if value is None or pd.isna(value):
+            return ""
+
+        return str(value)
+
+
+class PairedCohortSurvivalKMDataView(APIView):
+    """
+    Return Kaplan-Meier survival curve data for paired cohort task.
+
+    Query params:
+        taskUUID: PairedCohortTask UUID
+
+    Input filename:
+        {task_name}_survival_analysis.csv
+    """
+
+    def get(self, request):
+        try:
+            task_uuid = str(request.query_params.get("taskUUID", "")).strip()
+
+            if not task_uuid:
+                return Response(
+                    {"detail": "Missing query parameter: taskUUID."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                uuid_lib.UUID(task_uuid)
+            except ValueError:
+                return Response(
+                    {"detail": "Invalid Task UUID format."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                task = PairedCohortTask.objects.get(uuid=task_uuid)
+            except PairedCohortTask.DoesNotExist:
+                return Response(
+                    {
+                        "detail": f"PairedCohortTask not found: {task_uuid}."
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if task.status != PairedCohortTask.Status.Success:
+                return Response(
+                    {
+                        "detail": (
+                            "Paired cohort task is not completed successfully. "
+                            f"Current status: {task.get_status_display()}."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                result = build_paired_cohort_survival_km_data(task)
+            except PairedCohortTaskPathError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except FileNotFoundError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except PairedCohortTaskInputError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {"detail": f"Server error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
