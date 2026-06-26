@@ -6,12 +6,20 @@ import pandas as pd
 from lifelines import KaplanMeierFitter
 from lifelines.statistics import logrank_test
 
-PAIRED_COHORT_ALLOWED_FILE_FIELDS = [
+PAIRED_COHORT_REQUIRED_FILE_FIELDS = [
     "mrna_file",
     "mirna_file",
+    "meta_file",
+]
+
+PAIRED_COHORT_OPTIONAL_CERNA_FILE_FIELDS = [
     "lncrna_file",
     "circrna_file",
-    "meta_file",
+]
+
+PAIRED_COHORT_ALLOWED_FILE_FIELDS = [
+    *PAIRED_COHORT_REQUIRED_FILE_FIELDS,
+    *PAIRED_COHORT_OPTIONAL_CERNA_FILE_FIELDS,
 ]
 
 PAIRED_COHORT_INPUT_FILENAME_MAP = {
@@ -202,9 +210,30 @@ def save_paired_cohort_uploaded_input_files(task, files) -> dict:
 
     saved_files = {}
 
+    missing_required_files = [
+        field_name
+        for field_name in PAIRED_COHORT_REQUIRED_FILE_FIELDS
+        if field_name not in files
+    ]
+
+    if missing_required_files:
+        raise PairedCohortTaskInputError(
+            "Missing uploaded file(s): "
+            f"{', '.join(missing_required_files)}."
+        )
+
+    has_lncrna_file = "lncrna_file" in files
+    has_circrna_file = "circrna_file" in files
+
+    if not has_lncrna_file and not has_circrna_file:
+        raise PairedCohortTaskInputError(
+            "At least one of lncrna_file or circrna_file is required."
+        )
+
     for field_name in PAIRED_COHORT_ALLOWED_FILE_FIELDS:
         if field_name not in files:
-            raise PairedCohortTaskInputError(f"Missing uploaded file: {field_name}.")
+            saved_files[field_name] = ""
+            continue
 
         uploaded_file = files[field_name]
         file_path = get_paired_cohort_input_file_path(task, field_name)
@@ -221,7 +250,7 @@ def save_paired_cohort_uploaded_input_files(task, files) -> dict:
 def validate_paired_cohort_input_files(task) -> dict:
     validated_files = {}
 
-    for field_name in PAIRED_COHORT_ALLOWED_FILE_FIELDS:
+    for field_name in PAIRED_COHORT_REQUIRED_FILE_FIELDS:
         file_path = get_paired_cohort_input_file_path(task, field_name)
 
         if not file_path.exists() or not file_path.is_file():
@@ -230,6 +259,23 @@ def validate_paired_cohort_input_files(task) -> dict:
             )
 
         validated_files[field_name] = file_path
+
+    optional_existing_files = []
+
+    for field_name in PAIRED_COHORT_OPTIONAL_CERNA_FILE_FIELDS:
+        file_path = get_paired_cohort_input_file_path(task, field_name)
+
+        if file_path.exists() and file_path.is_file():
+            validated_files[field_name] = file_path
+            optional_existing_files.append(field_name)
+        else:
+            validated_files[field_name] = None
+
+    if not optional_existing_files:
+        raise FileNotFoundError(
+            "At least one paired cohort ceRNA input file is required: "
+            "lncrna_file or circrna_file."
+        )
 
     return validated_files
 
@@ -359,10 +405,17 @@ def validate_paired_cohort_file_contents(task) -> dict:
         file_label="miRNA expression file",
     )
 
-    validate_expression_file_columns(
-        file_path=input_files["lncrna_file"],
-        file_label="lncRNA expression file",
-    )
+    if input_files.get("lncrna_file") is not None:
+        validate_expression_file_columns(
+            file_path=input_files["lncrna_file"],
+            file_label="lncRNA expression file",
+        )
+
+    if input_files.get("circrna_file") is not None:
+        validate_expression_file_columns(
+            file_path=input_files["circrna_file"],
+            file_label="circRNA expression file",
+        )
 
     validate_meta_file_columns_and_groups(
         file_path=input_files["meta_file"],

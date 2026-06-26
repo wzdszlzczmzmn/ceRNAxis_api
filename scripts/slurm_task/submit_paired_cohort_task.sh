@@ -26,11 +26,19 @@ set -Eeuo pipefail
 #   <logfc_cutoff_circrna> \
 #   <padj_cutoff_circrna> \
 #   <deg_method> \
-#   <map_info_csv>
+#   <map_info_csv> \
+#   <cancer_type> \
+#   <use_padj>
+#
+# Notes:
+#   - mrna_file, mirna_file and meta_file are required.
+#   - At least one of lncrna_file or circrna_file is required.
+#   - cancer_type can be an empty string.
+#   - use_padj must be TRUE or FALSE.
 
-if [ $# -lt 18 ]; then
+if [ $# -lt 20 ]; then
     echo "Error: Missing arguments."
-    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <mirna_file> <lncrna_file> <circrna_file> <meta_file> <outdir> <logfc_cutoff_mrna> <padj_cutoff_mrna> <logfc_cutoff_mirna> <padj_cutoff_mirna> <logfc_cutoff_lncrna> <padj_cutoff_lncrna> <logfc_cutoff_circrna> <padj_cutoff_circrna> <deg_method> <map_info_csv>"
+    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <mirna_file> <lncrna_file> <circrna_file> <meta_file> <outdir> <logfc_cutoff_mrna> <padj_cutoff_mrna> <logfc_cutoff_mirna> <padj_cutoff_mirna> <logfc_cutoff_lncrna> <padj_cutoff_lncrna> <logfc_cutoff_circrna> <padj_cutoff_circrna> <deg_method> <map_info_csv> <cancer_type> <use_padj>"
     exit 1
 fi
 
@@ -53,6 +61,8 @@ logfc_cutoff_circrna="${15}"
 padj_cutoff_circrna="${16}"
 deg_method="${17}"
 map_info_csv="${18}"
+cancer_type="${19}"
+use_padj="${20}"
 
 # Fixed parameters for Module2.
 expr_sample_col="sample_id"
@@ -111,6 +121,8 @@ echo "logfc_cutoff_circrna: ${logfc_cutoff_circrna}"
 echo "padj_cutoff_circrna: ${padj_cutoff_circrna}"
 echo "deg_method: ${deg_method}"
 echo "map_info_csv: ${map_info_csv}"
+echo "cancer_type: ${cancer_type}"
+echo "use_padj: ${use_padj}"
 echo "script_wdr: ${script_wdr}"
 echo "========================================"
 
@@ -130,12 +142,19 @@ if [ ! -f "${mirna_file}" ]; then
     fail_task "mirna_file does not exist: ${mirna_file}"
 fi
 
-if [ ! -f "${lncrna_file}" ]; then
-    fail_task "lncrna_file does not exist: ${lncrna_file}"
+has_lncrna_file="FALSE"
+has_circrna_file="FALSE"
+
+if [ -n "${lncrna_file}" ] && [ -f "${lncrna_file}" ]; then
+    has_lncrna_file="TRUE"
 fi
 
-if [ ! -f "${circrna_file}" ]; then
-    fail_task "circrna_file does not exist: ${circrna_file}"
+if [ -n "${circrna_file}" ] && [ -f "${circrna_file}" ]; then
+    has_circrna_file="TRUE"
+fi
+
+if [ "${has_lncrna_file}" != "TRUE" ] && [ "${has_circrna_file}" != "TRUE" ]; then
+    fail_task "At least one of lncrna_file or circrna_file must exist."
 fi
 
 if [ ! -f "${meta_file}" ]; then
@@ -149,6 +168,14 @@ fi
 if [ "${deg_method}" != "limma" ] && [ "${deg_method}" != "deseq2" ]; then
     fail_task "Invalid deg_method: ${deg_method}. Allowed values: limma, deseq2."
 fi
+
+if [ "${use_padj}" != "TRUE" ] && [ "${use_padj}" != "FALSE" ]; then
+    fail_task "Invalid use_padj: ${use_padj}. Allowed values: TRUE, FALSE."
+fi
+
+echo "Input file availability:"
+echo "has_lncrna_file: ${has_lncrna_file}"
+echo "has_circrna_file: ${has_circrna_file}"
 
 echo "Running run_module2_all.sh..."
 
@@ -174,7 +201,9 @@ bash "${script_wdr}/run/run_module2_all.sh" \
     "${logfc_cutoff_circrna}" \
     "${padj_cutoff_circrna}" \
     "${deg_method}" \
-    "${map_info_csv}"
+    "${map_info_csv}" \
+    "${cancer_type}" \
+    "${use_padj}"
 
 script_exit_code=$?
 finished_time=$(date +"%Y-%m-%d %H:%M:%S")

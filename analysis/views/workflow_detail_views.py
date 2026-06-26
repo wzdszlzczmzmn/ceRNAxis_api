@@ -925,16 +925,19 @@ class PairedCohortDEGVolcanoView(APIView):
 
     Query params:
         taskUUID: PairedCohortTask UUID
-        rna_type: one of mRNA, miRNA, lncRNA
+        rna_type: one of mRNA, miRNA, lncRNA, circRNA
 
     DEG filename rule:
         {task_name}_{deg_method}_{rna_type}.csv
+
+    Required DEG columns:
+        gene_name, log2FC, pvalue, regulation
     """
 
     REQUIRED_COLUMNS = {
         "gene_name",
         "log2FC",
-        "padj",
+        "pvalue",
         "regulation",
     }
 
@@ -1043,7 +1046,7 @@ class PairedCohortDEGVolcanoView(APIView):
                 [
                     "gene_name",
                     "log2FC",
-                    "padj",
+                    "pvalue",
                     "regulation",
                 ]
             ].copy()
@@ -1056,12 +1059,29 @@ class PairedCohortDEGVolcanoView(APIView):
                 subset=[
                     "gene_name",
                     "log2FC",
-                    "padj",
+                    "pvalue",
                     "regulation",
                 ]
             )
 
-            df = df[df["padj"] > 0]
+            df["log2FC"] = pd.to_numeric(
+                df["log2FC"],
+                errors="coerce",
+            )
+
+            df["pvalue"] = pd.to_numeric(
+                df["pvalue"],
+                errors="coerce",
+            )
+
+            df = df.dropna(
+                subset=[
+                    "log2FC",
+                    "pvalue",
+                ]
+            )
+
+            df = df[df["pvalue"] > 0]
 
             df = df[
                 df["regulation"].isin(self.VALID_REGULATION_GROUPS)
@@ -1070,7 +1090,7 @@ class PairedCohortDEGVolcanoView(APIView):
             cleaned_count = int(df.shape[0])
             dropped_count = raw_count - cleaned_count
 
-            df["neg_log10_padj"] = -np.log10(df["padj"])
+            df["neg_log10_pvalue"] = -np.log10(df["pvalue"])
 
             groups = {}
 
@@ -1081,8 +1101,8 @@ class PairedCohortDEGVolcanoView(APIView):
                     {
                         "gene_name": row["gene_name"],
                         "log2FC": float(row["log2FC"]),
-                        "padj": float(row["padj"]),
-                        "neg_log10_padj": float(row["neg_log10_padj"]),
+                        "pvalue": float(row["pvalue"]),
+                        "neg_log10_pvalue": float(row["neg_log10_pvalue"]),
                     }
                     for _, row in sub_df.iterrows()
                 ]

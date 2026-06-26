@@ -161,6 +161,14 @@ class PairedCohortTask(models.Model):
         max_length=32,
     )
 
+    cancer_type = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+    )
+
+    use_padj = models.BooleanField(default=True)
+
     mrna_file = models.CharField(
         max_length=255,
         blank=True,

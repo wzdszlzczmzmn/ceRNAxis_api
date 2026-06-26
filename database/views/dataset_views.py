@@ -446,7 +446,7 @@ class DatasetDEGVolcanoView(APIView):
     REQUIRED_COLUMNS = {
         "gene_name",
         "log2FC",
-        "padj",
+        "pvalue",
         "regulation",
     }
 
@@ -507,7 +507,10 @@ class DatasetDEGVolcanoView(APIView):
         if missing_columns:
             return Response(
                 {
-                    "detail": f"Missing required columns: {sorted(missing_columns)}"
+                    "detail": (
+                        "Missing required columns: "
+                        f"{sorted(missing_columns)}"
+                    )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -516,7 +519,7 @@ class DatasetDEGVolcanoView(APIView):
             [
                 "gene_name",
                 "log2FC",
-                "padj",
+                "pvalue",
                 "regulation",
             ]
         ].copy()
@@ -529,12 +532,34 @@ class DatasetDEGVolcanoView(APIView):
             subset=[
                 "gene_name",
                 "log2FC",
-                "padj",
+                "pvalue",
                 "regulation",
             ]
         )
 
-        df = df[df["padj"] > 0]
+        df["gene_name"] = df["gene_name"].astype(str).str.strip()
+        df["regulation"] = df["regulation"].astype(str).str.strip()
+
+        df["log2FC"] = pd.to_numeric(
+            df["log2FC"],
+            errors="coerce",
+        )
+
+        df["pvalue"] = pd.to_numeric(
+            df["pvalue"],
+            errors="coerce",
+        )
+
+        df = df.dropna(
+            subset=[
+                "gene_name",
+                "log2FC",
+                "pvalue",
+                "regulation",
+            ]
+        )
+
+        df = df[df["pvalue"] > 0]
 
         df = df[
             df["regulation"].isin(self.VALID_REGULATION_GROUPS)
@@ -543,7 +568,7 @@ class DatasetDEGVolcanoView(APIView):
         cleaned_count = int(df.shape[0])
         dropped_count = raw_count - cleaned_count
 
-        df["neg_log10_padj"] = -np.log10(df["padj"])
+        df["neg_log10_pvalue"] = -np.log10(df["pvalue"])
 
         groups = {}
 
@@ -554,8 +579,8 @@ class DatasetDEGVolcanoView(APIView):
                 {
                     "gene_name": row["gene_name"],
                     "log2FC": float(row["log2FC"]),
-                    "padj": float(row["padj"]),
-                    "neg_log10_padj": float(row["neg_log10_padj"]),
+                    "pvalue": float(row["pvalue"]),
+                    "neg_log10_pvalue": float(row["neg_log10_pvalue"]),
                 }
                 for _, row in sub_df.iterrows()
             ]

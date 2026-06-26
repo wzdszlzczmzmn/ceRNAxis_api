@@ -166,6 +166,9 @@ def sbatch_paired_cohort_task(task_uuid) -> dict:
                 "Invalid deg_method. Allowed values are: limma, deseq2."
             )
 
+        cancer_type = str(getattr(task, "cancer_type", "") or "").strip()
+        use_padj = "TRUE" if getattr(task, "use_padj", True) else "FALSE"
+
     except Exception as e:
         return {
             "success": False,
@@ -184,8 +187,8 @@ def sbatch_paired_cohort_task(task_uuid) -> dict:
         dataset,
         str(input_files["mrna_file"]),
         str(input_files["mirna_file"]),
-        str(input_files["lncrna_file"]),
-        str(input_files["circrna_file"]),
+        str(input_files["lncrna_file"] or ""),
+        str(input_files["circrna_file"] or ""),
         str(input_files["meta_file"]),
         str(output_dir),
         str(task.logfc_cutoff_mrna),
@@ -198,6 +201,8 @@ def sbatch_paired_cohort_task(task_uuid) -> dict:
         str(task.padj_cutoff_circrna),
         task.deg_method,
         str(map_info_file),
+        cancer_type,
+        use_padj,
     ]
 
     result = subprocess.run(

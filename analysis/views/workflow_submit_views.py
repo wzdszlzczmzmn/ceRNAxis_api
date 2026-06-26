@@ -20,7 +20,7 @@ from analysis.utils.immune_annotation_path_utils import (
 )
 from analysis.utils.paired_cohort_task_utils import PAIRED_COHORT_ALLOWED_FILE_FIELDS, \
     prepare_paired_cohort_workspace, save_paired_cohort_uploaded_input_files, PairedCohortTaskInputError, \
-    PairedCohortTaskPathError, validate_paired_cohort_file_contents
+    PairedCohortTaskPathError, validate_paired_cohort_file_contents, PAIRED_COHORT_REQUIRED_FILE_FIELDS
 
 
 class CustomListQueryTaskSubmitView(APIView):
@@ -156,6 +156,30 @@ class CustomListQueryTaskSubmitView(APIView):
 
 
 class PairedCohortTaskSubmitView(APIView):
+    PAIRED_COHORT_ALLOWED_CANCER_TYPES = [
+        "MEL",
+        "LUAD",
+        "OS",
+        "STAD",
+        "BRCA",
+        "CRC",
+        "NSCLC",
+        "OV",
+        "LUSC",
+        "UCEC",
+        "CESC",
+        "HCC",
+        "AML",
+        "ALL",
+        "PRAD",
+        "SCLC",
+        "NBL",
+        "MM",
+        "Lymphoma",
+        "PAAD",
+        "",
+    ]
+
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -222,19 +246,54 @@ class PairedCohortTaskSubmitView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            missing_files = [
-                field_name
-                for field_name in PAIRED_COHORT_ALLOWED_FILE_FIELDS
-                if field_name not in request.FILES
-            ]
+            cancer_type = str(request.data.get("cancer_type", "")).strip()
+            use_padj = self.parse_bool_field(
+                request,
+                "use_padj",
+                default=True,
+            )
 
-            if missing_files:
+            if cancer_type not in self.PAIRED_COHORT_ALLOWED_CANCER_TYPES:
                 return Response(
                     {
                         "success": False,
                         "msg": (
-                            f"Missing uploaded file(s): "
-                            f"{', '.join(missing_files)}."
+                            "Invalid field: cancer_type. "
+                            "Allowed values are: "
+                            f"{', '.join([x for x in self.PAIRED_COHORT_ALLOWED_CANCER_TYPES if x])} "
+                            "or empty string."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            missing_required_files = [
+                field_name
+                for field_name in PAIRED_COHORT_REQUIRED_FILE_FIELDS
+                if field_name not in request.FILES
+            ]
+
+            if missing_required_files:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": (
+                            "Missing uploaded file(s): "
+                            f"{', '.join(missing_required_files)}."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if (
+                    "lncrna_file" not in request.FILES
+                    and "circrna_file" not in request.FILES
+            ):
+                return Response(
+                    {
+                        "success": False,
+                        "msg": (
+                            "At least one of lncrna_file or circrna_file is required."
                         ),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -289,6 +348,8 @@ class PairedCohortTaskSubmitView(APIView):
                 status=PairedCohortTask.Status.Pending,
                 map_info=map_info,
                 deg_method=deg_method,
+                cancer_type=cancer_type,
+                use_padj=use_padj,
                 logfc_cutoff_mrna=logfc_cutoff_mrna,
                 padj_cutoff_mrna=padj_cutoff_mrna,
                 logfc_cutoff_mirna=logfc_cutoff_mirna,
@@ -311,8 +372,8 @@ class PairedCohortTaskSubmitView(APIView):
 
                 task.mrna_file = saved_files["mrna_file"]
                 task.mirna_file = saved_files["mirna_file"]
-                task.lncrna_file = saved_files["lncrna_file"]
-                task.circrna_file = saved_files["circrna_file"]
+                task.lncrna_file = saved_files.get("lncrna_file", "")
+                task.circrna_file = saved_files.get("circrna_file", "")
                 task.meta_file = saved_files["meta_file"]
 
                 task.save(
@@ -386,6 +447,8 @@ class PairedCohortTaskSubmitView(APIView):
                         ).strftime("%Y-%m-%d %H:%M:%S"),
                         "map_info": task.map_info,
                         "deg_method": task.deg_method,
+                        "cancer_type": task.cancer_type,
+                        "use_padj": task.use_padj,
                         "files": {
                             "mrna_file": task.mrna_file,
                             "mirna_file": task.mirna_file,
@@ -452,6 +515,28 @@ class PairedCohortTaskSubmitView(APIView):
                 )
 
         return value
+
+    @staticmethod
+    def parse_bool_field(request, field_name, default=None):
+        raw_value = request.data.get(field_name, None)
+
+        if raw_value is None or str(raw_value).strip() == "":
+            if default is not None:
+                return default
+            raise ValueError(f"Missing field: {field_name}.")
+
+        value = str(raw_value).strip().lower()
+
+        if value in ["true", "1", "yes", "y"]:
+            return True
+
+        if value in ["false", "0", "no", "n"]:
+            return False
+
+        raise ValueError(
+            f"Invalid boolean field: {field_name}. "
+            "Allowed values: true, false."
+        )
 
 
 class HybridReferenceTaskSubmitView(APIView):
