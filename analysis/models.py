@@ -339,3 +339,24 @@ class HybridReferenceTask(models.Model):
             models.Index(fields=["tcga_type"]),
             models.Index(fields=["create_time"]),
         ]
+
+    def __str__(self):
+        return f"{self.task_name} ({self.uuid})"
+
+    def get_workspace_dir_absolute_path(self):
+        return os.path.join(
+            settings.WORKSPACE_HOME,
+            str(self.uuid),
+        )
+
+    def get_input_dir_absolute_path(self):
+        return os.path.join(
+            self.get_workspace_dir_absolute_path(),
+            "input",
+        )
+
+    def get_output_dir_absolute_path(self):
+        return os.path.join(
+            self.get_workspace_dir_absolute_path(),
+            "output",
+        )
