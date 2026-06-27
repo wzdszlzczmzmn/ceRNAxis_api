@@ -245,6 +245,7 @@ def sbatch_hybrid_reference_task(task_uuid) -> dict:
         9. padj_cutoff_mrna
         10. deg_method
         11. map_info_csv
+        12. use_padj
     """
 
     try:
@@ -299,6 +300,13 @@ def sbatch_hybrid_reference_task(task_uuid) -> dict:
                 f"{', '.join(HYBRID_REFERENCE_VALID_DEG_METHODS)}."
             )
 
+        if not isinstance(task.use_padj, bool):
+            raise ValueError(
+                "Invalid use_padj. Allowed values are True or False."
+            )
+
+        use_padj = "TRUE" if task.use_padj else "FALSE"
+
     except Exception as e:
         return {
             "success": False,
@@ -324,6 +332,7 @@ def sbatch_hybrid_reference_task(task_uuid) -> dict:
         str(task.padj_cutoff_mrna),
         task.deg_method,
         str(map_info_file),
+        use_padj,
     ]
 
     result = subprocess.run(

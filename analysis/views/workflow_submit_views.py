@@ -400,9 +400,9 @@ class PairedCohortTaskSubmitView(APIView):
                 )
 
             except (
-                OSError,
-                PairedCohortTaskPathError,
-                FileNotFoundError,
+                    OSError,
+                    PairedCohortTaskPathError,
+                    FileNotFoundError,
             ) as e:
                 task.status = PairedCohortTask.Status.Failed
                 task.finish_time = timezone.now()
@@ -550,6 +550,17 @@ class HybridReferenceTaskSubmitView(APIView):
             tcga_type = str(request.data.get("tcga_type", "")).strip()
             lncrna_type = str(request.data.get("lncrna_type", "")).strip()
 
+            try:
+                use_padj = self.parse_bool_field(request, "use_padj")
+            except ValueError as e:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             if not task_name:
                 return Response(
                     {
@@ -620,8 +631,12 @@ class HybridReferenceTaskSubmitView(APIView):
                     tcga_type=tcga_type,
                     lncrna_type=lncrna_type,
                     deg_method=deg_method,
+                    use_padj=use_padj,
                 )
-            except (HybridReferenceTaskInputError, HybridReferenceTaskPathError) as e:
+            except (
+                    HybridReferenceTaskInputError,
+                    HybridReferenceTaskPathError,
+            ) as e:
                 return Response(
                     {
                         "success": False,
@@ -674,6 +689,7 @@ class HybridReferenceTaskSubmitView(APIView):
                 map_info=map_info,
                 tcga_type=tcga_type,
                 lncrna_type=lncrna_type,
+                use_padj=use_padj,
                 deg_method=deg_method,
                 logfc_cutoff_mrna=logfc_cutoff_mrna,
                 padj_cutoff_mrna=padj_cutoff_mrna,
@@ -713,9 +729,9 @@ class HybridReferenceTaskSubmitView(APIView):
                 )
 
             except (
-                OSError,
-                HybridReferenceTaskPathError,
-                FileNotFoundError,
+                    OSError,
+                    HybridReferenceTaskPathError,
+                    FileNotFoundError,
             ) as e:
                 task.status = HybridReferenceTask.Status.Failed
                 task.finish_time = timezone.now()
@@ -761,6 +777,7 @@ class HybridReferenceTaskSubmitView(APIView):
                         "map_info": task.map_info,
                         "tcga_type": task.tcga_type,
                         "lncrna_type": task.lncrna_type,
+                        "use_padj": task.use_padj,
                         "deg_method": task.deg_method,
                         "files": {
                             "mrna_file": task.mrna_file,
@@ -769,7 +786,7 @@ class HybridReferenceTaskSubmitView(APIView):
                         "cutoffs": {
                             "mRNA": {
                                 "logfc_cutoff": task.logfc_cutoff_mrna,
-                                "padj_cutoff": task.padj_cutoff_mrna,
+                                "pvalue_cutoff": task.padj_cutoff_mrna,
                             },
                         },
                     },
@@ -813,3 +830,23 @@ class HybridReferenceTaskSubmitView(APIView):
                 )
 
         return value
+
+    @staticmethod
+    def parse_bool_field(request, field_name):
+        raw_value = request.data.get(field_name, None)
+
+        if raw_value is None or str(raw_value).strip() == "":
+            raise ValueError(f"Missing field: {field_name}.")
+
+        normalized_value = str(raw_value).strip().lower()
+
+        if normalized_value in {"true", "1", "yes", "y"}:
+            return True
+
+        if normalized_value in {"false", "0", "no", "n"}:
+            return False
+
+        raise ValueError(
+            f"Invalid boolean field: {field_name}. "
+            "Allowed values are true or false."
+        )

@@ -298,6 +298,7 @@ def validate_hybrid_reference_task_params(
     tcga_type: str,
     lncrna_type: str,
     deg_method: str,
+    use_padj: bool = True,
 ) -> None:
     validate_safe_name(task_name, "task_name")
 
@@ -317,4 +318,9 @@ def validate_hybrid_reference_task_params(
         raise HybridReferenceTaskInputError(
             "Invalid field: deg_method. Allowed values are: "
             f"{', '.join(HYBRID_REFERENCE_VALID_DEG_METHODS)}."
+        )
+
+    if not isinstance(use_padj, bool):
+        raise HybridReferenceTaskInputError(
+            "Invalid field: use_padj. Allowed values are TRUE or FALSE."
         )

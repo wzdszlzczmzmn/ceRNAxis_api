@@ -29,7 +29,7 @@ from analysis.utils.paired_cohort_task_utils import PAIRED_COHORT_INPUT_FILENAME
     PAIRED_COHORT_GROUP_COL, PAIRED_COHORT_CASE_LABEL, extract_paired_cohort_correlation_stats, \
     read_paired_cohort_background_file, get_paired_cohort_available_background_types, \
     read_paired_cohort_axis_final_file, normalize_paired_cohort_axis_final_dataframe, PAIRED_COHORT_AXIS_FINAL_COLUMNS, \
-    build_paired_cohort_survival_km_data
+    build_paired_cohort_survival_km_data, read_paired_cohort_cmap_file, read_paired_cohort_mrna_gsea_file
 from analysis.utils.workflow_network_utils import immune_gene_node_key, normalize_rna_name, \
     append_immune_annotation_to_edge, immune_edge_id, edge_pair_key, format_immune_evidence_item, \
     mark_node_as_immune_related, to_float_or_none, is_valid_uuid
@@ -931,13 +931,19 @@ class PairedCohortDEGVolcanoView(APIView):
         {task_name}_{deg_method}_{rna_type}.csv
 
     Required DEG columns:
-        gene_name, log2FC, pvalue, regulation
+        gene_name, log2FC, regulation, and one p-value column
+
+    p-value source:
+        task.use_padj == True  -> use padj column
+        task.use_padj == False -> use pvalue column
+
+    Response keeps unified field names:
+        pvalue, neg_log10_pvalue
     """
 
-    REQUIRED_COLUMNS = {
+    BASE_REQUIRED_COLUMNS = {
         "gene_name",
         "log2FC",
-        "pvalue",
         "regulation",
     }
 
@@ -1002,6 +1008,10 @@ class PairedCohortDEGVolcanoView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            use_padj = bool(getattr(task, "use_padj", True))
+            pvalue_source = "padj" if use_padj else "pvalue"
+            pvalue_label = "adjusted p-value" if use_padj else "raw p-value"
+
             try:
                 deg_file = self.get_deg_file_path(
                     task=task,
@@ -1029,14 +1039,17 @@ class PairedCohortDEGVolcanoView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-            missing_columns = self.REQUIRED_COLUMNS - set(df.columns)
+            required_columns = self.BASE_REQUIRED_COLUMNS | {pvalue_source}
+            missing_columns = required_columns - set(df.columns)
 
             if missing_columns:
                 return Response(
                     {
                         "detail": (
                             "Missing required columns: "
-                            f"{sorted(missing_columns)}"
+                            f"{sorted(missing_columns)}. "
+                            f"This task uses {pvalue_label}, so the DEG file "
+                            f"must contain column: {pvalue_source}."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -1046,23 +1059,23 @@ class PairedCohortDEGVolcanoView(APIView):
                 [
                     "gene_name",
                     "log2FC",
-                    "pvalue",
+                    pvalue_source,
                     "regulation",
                 ]
             ].copy()
+
+            df = df.rename(
+                columns={
+                    pvalue_source: "pvalue",
+                }
+            )
 
             df = df.replace([np.inf, -np.inf], np.nan)
 
             raw_count = int(df.shape[0])
 
-            df = df.dropna(
-                subset=[
-                    "gene_name",
-                    "log2FC",
-                    "pvalue",
-                    "regulation",
-                ]
-            )
+            df["gene_name"] = df["gene_name"].astype(str).str.strip()
+            df["regulation"] = df["regulation"].astype(str).str.strip()
 
             df["log2FC"] = pd.to_numeric(
                 df["log2FC"],
@@ -1076,12 +1089,16 @@ class PairedCohortDEGVolcanoView(APIView):
 
             df = df.dropna(
                 subset=[
+                    "gene_name",
                     "log2FC",
                     "pvalue",
+                    "regulation",
                 ]
             )
 
+            df = df[df["gene_name"] != ""]
             df = df[df["pvalue"] > 0]
+            df = df[df["pvalue"] <= 1]
 
             df = df[
                 df["regulation"].isin(self.VALID_REGULATION_GROUPS)
@@ -1114,6 +1131,11 @@ class PairedCohortDEGVolcanoView(APIView):
                     "deg_method": task.deg_method,
                     "rna_type": rna_type,
                     "deg_file": deg_file.name,
+
+                    "use_padj": use_padj,
+                    "pvalue_source": pvalue_source,
+                    "pvalue_label": pvalue_label,
+
                     "summary": {
                         "raw_count": raw_count,
                         "cleaned_count": cleaned_count,
@@ -2739,3 +2761,412 @@ class PairedCohortSurvivalKMDataView(APIView):
                 {"detail": f"Server error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class PairedCohortDEGPathwayView(APIView):
+    """
+    Return DEG pathway bubble plot data for PairedCohortTask.
+
+    Query params:
+        taskUUID: PairedCohortTask UUID
+
+    Input file:
+        {task_name}_mRNA_gsea.csv
+
+    File location:
+        task output directory
+
+    Required columns:
+        Term, NES, FDR q-val
+
+    Plot mapping:
+        y = Term
+        x = NES
+        bubble size = -log10(FDR q-val)
+    """
+
+    REQUIRED_COLUMNS = {
+        "Term",
+        "NES",
+        "FDR q-val",
+    }
+
+    OPTIONAL_COLUMNS = [
+        "Name",
+        "ES",
+        "NOM p-val",
+        "FWER p-val",
+        "Tag %",
+        "Gene %",
+        "Lead_genes",
+    ]
+
+    def get(self, request):
+        try:
+            task_uuid = str(
+                request.query_params.get("taskUUID", "")
+            ).strip()
+
+            if not task_uuid:
+                return Response(
+                    {
+                        "detail": "Missing query parameter: taskUUID."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                uuid_lib.UUID(task_uuid)
+            except ValueError:
+                return Response(
+                    {
+                        "detail": "Invalid Task UUID format."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                task = PairedCohortTask.objects.get(uuid=task_uuid)
+            except PairedCohortTask.DoesNotExist:
+                return Response(
+                    {
+                        "detail": f"PairedCohortTask not found: {task_uuid}."
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if task.status != PairedCohortTask.Status.Success:
+                return Response(
+                    {
+                        "detail": (
+                            "Paired cohort task is not completed successfully. "
+                            f"Current status: {task.get_status_display()}."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                gsea_file, df = read_paired_cohort_mrna_gsea_file(task)
+            except FileNotFoundError as e:
+                return Response(
+                    {
+                        "detail": str(e)
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except (
+                PairedCohortTaskInputError,
+                PairedCohortTaskPathError,
+            ) as e:
+                return Response(
+                    {
+                        "detail": str(e)
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            missing_columns = self.REQUIRED_COLUMNS - set(df.columns)
+
+            if missing_columns:
+                return Response(
+                    {
+                        "detail": (
+                            "Missing required columns: "
+                            f"{sorted(missing_columns)}"
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            raw_count = int(df.shape[0])
+
+            pathway_df = self.normalize_gsea_dataframe(df)
+
+            cleaned_count = int(pathway_df.shape[0])
+            dropped_count = raw_count - cleaned_count
+
+            results = [
+                self.format_row(row)
+                for _, row in pathway_df.iterrows()
+            ]
+
+            return Response(
+                {
+                    "uuid": str(task.uuid),
+                    "task_name": task.task_name,
+                    "gsea_file": gsea_file.name,
+                    "title": "DEG Pathway Enrichment",
+                    "x_field": "NES",
+                    "y_field": "Term",
+                    "size_field": "neg_log10_fdr_qval",
+                    "summary": {
+                        "raw_count": raw_count,
+                        "cleaned_count": cleaned_count,
+                        "dropped_count": dropped_count,
+                    },
+                    "results": results,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {
+                    "detail": f"Server error: {str(e)}",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @classmethod
+    def normalize_gsea_dataframe(cls, df: pd.DataFrame) -> pd.DataFrame:
+        normalized_df = df.copy()
+
+        normalized_df = normalized_df.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+
+        normalized_df["Term"] = (
+            normalized_df["Term"]
+            .astype(str)
+            .str.strip()
+        )
+
+        normalized_df["NES"] = pd.to_numeric(
+            normalized_df["NES"],
+            errors="coerce",
+        )
+
+        normalized_df["FDR q-val"] = pd.to_numeric(
+            normalized_df["FDR q-val"],
+            errors="coerce",
+        )
+
+        if "ES" in normalized_df.columns:
+            normalized_df["ES"] = pd.to_numeric(
+                normalized_df["ES"],
+                errors="coerce",
+            )
+
+        if "NOM p-val" in normalized_df.columns:
+            normalized_df["NOM p-val"] = pd.to_numeric(
+                normalized_df["NOM p-val"],
+                errors="coerce",
+            )
+
+        if "FWER p-val" in normalized_df.columns:
+            normalized_df["FWER p-val"] = pd.to_numeric(
+                normalized_df["FWER p-val"],
+                errors="coerce",
+            )
+
+        normalized_df = normalized_df.dropna(
+            subset=[
+                "Term",
+                "NES",
+                "FDR q-val",
+            ]
+        )
+
+        normalized_df = normalized_df[
+            normalized_df["Term"] != ""
+        ].copy()
+
+        normalized_df = normalized_df[
+            normalized_df["FDR q-val"] > 0
+        ].copy()
+
+        normalized_df = normalized_df[
+            normalized_df["FDR q-val"] <= 1
+        ].copy()
+
+        normalized_df["neg_log10_fdr_qval"] = -np.log10(
+            normalized_df["FDR q-val"]
+        )
+
+        # 默认按 NES 从大到小排序，前端也可以自行排序。
+        normalized_df = normalized_df.sort_values(
+            by="NES",
+            ascending=False,
+        )
+
+        return normalized_df
+
+    @staticmethod
+    def safe_float_or_none(value):
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if pd.isna(result) or not np.isfinite(result):
+            return None
+
+        return result
+
+    @classmethod
+    def get_optional_value(cls, row, column_name: str):
+        if column_name not in row.index:
+            return None
+
+        value = row.get(column_name)
+
+        if pd.isna(value):
+            return None
+
+        return value
+
+    @classmethod
+    def format_row(cls, row) -> dict:
+        return {
+            "term": row["Term"],
+            "nes": cls.safe_float_or_none(row["NES"]),
+            "fdr_qval": cls.safe_float_or_none(row["FDR q-val"]),
+            "neg_log10_fdr_qval": cls.safe_float_or_none(
+                row["neg_log10_fdr_qval"]
+            ),
+
+            # Optional raw GSEA fields.
+            "name": cls.get_optional_value(row, "Name"),
+            "es": cls.safe_float_or_none(
+                cls.get_optional_value(row, "ES")
+            ),
+            "nom_pval": cls.safe_float_or_none(
+                cls.get_optional_value(row, "NOM p-val")
+            ),
+            "fwer_pval": cls.safe_float_or_none(
+                cls.get_optional_value(row, "FWER p-val")
+            ),
+            "tag_percent": cls.get_optional_value(row, "Tag %"),
+            "gene_percent": cls.get_optional_value(row, "Gene %"),
+            "lead_genes": cls.get_optional_value(row, "Lead_genes"),
+        }
+
+
+class PairedCohortCMapResultView(APIView):
+    """
+    Return full CMap result table for PairedCohortTask.
+
+    Query params:
+        taskUUID: PairedCohortTask UUID
+
+    CMap filename rule:
+        {task_name}_CMap.csv
+
+    File location:
+        task output directory
+    """
+
+    def get(self, request):
+        try:
+            task_uuid = str(
+                request.query_params.get("taskUUID", "")
+            ).strip()
+
+            if not task_uuid:
+                return Response(
+                    {
+                        "detail": "Missing query parameter: taskUUID."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                uuid_lib.UUID(task_uuid)
+            except ValueError:
+                return Response(
+                    {
+                        "detail": "Invalid Task UUID format."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                task = PairedCohortTask.objects.get(uuid=task_uuid)
+            except PairedCohortTask.DoesNotExist:
+                return Response(
+                    {
+                        "detail": f"PairedCohortTask not found: {task_uuid}."
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if task.status != PairedCohortTask.Status.Success:
+                return Response(
+                    {
+                        "detail": (
+                            "Paired cohort task is not completed successfully. "
+                            f"Current status: {task.get_status_display()}."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                cmap_file, df = read_paired_cohort_cmap_file(task)
+            except FileNotFoundError as e:
+                return Response(
+                    {
+                        "detail": str(e)
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except (
+                PairedCohortTaskInputError,
+                PairedCohortTaskPathError,
+            ) as e:
+                return Response(
+                    {
+                        "detail": str(e)
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            df = self.normalize_dataframe_for_response(df)
+
+            columns = [str(col) for col in df.columns]
+            results = df.to_dict(orient="records")
+
+            return Response(
+                {
+                    "uuid": str(task.uuid),
+                    "task_name": task.task_name,
+                    "cmap_file": cmap_file.name,
+                    "columns": columns,
+                    "summary": {
+                        "raw_count": len(results),
+                    },
+                    "results": results,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {
+                    "detail": f"Server error: {str(e)}",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @staticmethod
+    def normalize_dataframe_for_response(df: pd.DataFrame) -> pd.DataFrame:
+        normalized_df = df.copy()
+
+        normalized_df = normalized_df.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+
+        normalized_df = normalized_df.where(
+            pd.notnull(normalized_df),
+            None,
+        )
+
+        return normalized_df
+

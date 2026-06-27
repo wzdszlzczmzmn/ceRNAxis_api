@@ -7,12 +7,15 @@ from django.utils import timezone
 from analysis.models import PairedCohortTask
 
 
-DEMO_UUID = "3603a460-1972-4771-b3e0-21e05f00d9c8"
+DEMO_UUID = "2c09007c-e03e-43bb-a126-4757dd1326be"
 DEMO_TASK_NAME = "demo_task"
 DEMO_MAP_INFO = "ImmiRImmiR_LUAD"
 DEMO_DEG_METHOD = "limma"
-DEMO_CREATE_TIME = "2026-06-24 09:45:42"
-DEMO_FINISH_TIME = "2026-06-24 09:47:27"
+DEMO_CANCER_TYPE = "LUAD"
+DEMO_USE_PADJ = False
+
+DEMO_CREATE_TIME = "2026-06-26 10:39:03"
+DEMO_FINISH_TIME = "2026-06-26 10:54:44"
 
 DEMO_MRNA_FILE = "mrna.csv"
 DEMO_MIRNA_FILE = "mirna.csv"
@@ -77,10 +80,10 @@ class Command(BaseCommand):
             "--status",
             type=int,
             choices=[
-                PairedCohortTask.Status.Success,
                 PairedCohortTask.Status.Pending,
-                PairedCohortTask.Status.Failed,
                 PairedCohortTask.Status.Running,
+                PairedCohortTask.Status.Success,
+                PairedCohortTask.Status.Failed,
             ],
             default=PairedCohortTask.Status.Success,
             help="Task status. Default is Success.",
@@ -92,6 +95,28 @@ class Command(BaseCommand):
             default=DEMO_DEG_METHOD,
             help="DEG method. Default is limma.",
         )
+
+        parser.add_argument(
+            "--cancer-type",
+            default=DEMO_CANCER_TYPE,
+            help="Cancer type for the demo task.",
+        )
+
+        parser.add_argument(
+            "--use-padj",
+            dest="use_padj",
+            action="store_true",
+            help="Use adjusted P-value threshold.",
+        )
+
+        parser.add_argument(
+            "--no-use-padj",
+            dest="use_padj",
+            action="store_false",
+            help="Use raw P-value threshold instead of adjusted P-value.",
+        )
+
+        parser.set_defaults(use_padj=DEMO_USE_PADJ)
 
         parser.add_argument(
             "--mrna-file",
@@ -198,7 +223,6 @@ class Command(BaseCommand):
             raise CommandError(f"Invalid UUID: {options['uuid']}") from e
 
         task_status = options["status"]
-
         create_time = make_aware_datetime(options["create_time"])
 
         if task_status in {
@@ -218,6 +242,8 @@ class Command(BaseCommand):
                 "finish_time": finish_time,
                 "map_info": options["map_info"],
                 "deg_method": options["deg_method"],
+                "cancer_type": options["cancer_type"],
+                "use_padj": options["use_padj"],
                 "mrna_file": options["mrna_file"],
                 "mirna_file": options["mirna_file"],
                 "lncrna_file": options["lncrna_file"],
@@ -254,19 +280,27 @@ class Command(BaseCommand):
         self.stdout.write(f"finish_time: {task.finish_time}")
         self.stdout.write(f"map_info: {task.map_info}")
         self.stdout.write(f"deg_method: {task.deg_method}")
+        self.stdout.write(f"cancer_type: {task.cancer_type}")
+        self.stdout.write(f"use_padj: {task.use_padj}")
+
         self.stdout.write(f"mrna_file: {task.mrna_file}")
         self.stdout.write(f"mirna_file: {task.mirna_file}")
         self.stdout.write(f"lncrna_file: {task.lncrna_file}")
         self.stdout.write(f"circrna_file: {task.circrna_file}")
         self.stdout.write(f"meta_file: {task.meta_file}")
+
         self.stdout.write(f"logfc_cutoff_mrna: {task.logfc_cutoff_mrna}")
         self.stdout.write(f"padj_cutoff_mrna: {task.padj_cutoff_mrna}")
+
         self.stdout.write(f"logfc_cutoff_mirna: {task.logfc_cutoff_mirna}")
         self.stdout.write(f"padj_cutoff_mirna: {task.padj_cutoff_mirna}")
+
         self.stdout.write(f"logfc_cutoff_lncrna: {task.logfc_cutoff_lncrna}")
         self.stdout.write(f"padj_cutoff_lncrna: {task.padj_cutoff_lncrna}")
+
         self.stdout.write(f"logfc_cutoff_circrna: {task.logfc_cutoff_circrna}")
         self.stdout.write(f"padj_cutoff_circrna: {task.padj_cutoff_circrna}")
+
         self.stdout.write(f"workspace: {task.get_workspace_dir_absolute_path()}")
         self.stdout.write(f"input_dir: {task.get_input_dir_absolute_path()}")
         self.stdout.write(f"output_dir: {task.get_output_dir_absolute_path()}")

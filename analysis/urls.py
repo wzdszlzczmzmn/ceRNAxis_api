@@ -53,4 +53,8 @@ urlpatterns = [
          name='paired_cohort_survival_km'),
     path('hybrid_reference_task_submit/', workflow_submit_views.HybridReferenceTaskSubmitView.as_view(),
          name='hybrid_reference_task_submit'),
+    path('paired_cohort_deg_pathway/', workflow_detail_views.PairedCohortDEGPathwayView.as_view(),
+         name='paired_cohort_deg_pathway'),
+    path('paired_cohort_cmap_result/', workflow_detail_views.PairedCohortCMapResultView.as_view(),
+         name='paired_cohort_cmap_result'),
 ]

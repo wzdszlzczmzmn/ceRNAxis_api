@@ -19,11 +19,12 @@ set -Eeuo pipefail
 #   <logfc_cutoff_mrna> \
 #   <padj_cutoff_mrna> \
 #   <deg_method> \
-#   <map_info_csv>
+#   <map_info_csv> \
+#   <use_padj>
 
-if [ $# -lt 11 ]; then
+if [ $# -lt 12 ]; then
     echo "Error: Missing arguments."
-    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <meta_file> <tcga_type> <lncrna_type> <outdir> <logfc_cutoff_mrna> <padj_cutoff_mrna> <deg_method> <map_info_csv>"
+    echo "Usage: sbatch $0 <uuid> <dataset> <mrna_file> <meta_file> <tcga_type> <lncrna_type> <outdir> <logfc_cutoff_mrna> <padj_cutoff_mrna> <deg_method> <map_info_csv> <use_padj>"
     exit 1
 fi
 
@@ -38,6 +39,7 @@ logfc_cutoff_mrna="$8"
 padj_cutoff_mrna="$9"
 deg_method="${10}"
 map_info_csv="${11}"
+use_padj="${12}"
 
 # Fixed parameters for Module3.
 expr_sample_col="sample_id"
@@ -89,6 +91,7 @@ echo "logfc_cutoff_mrna: ${logfc_cutoff_mrna}"
 echo "padj_cutoff_mrna: ${padj_cutoff_mrna}"
 echo "deg_method: ${deg_method}"
 echo "map_info_csv: ${map_info_csv}"
+echo "use_padj: ${use_padj}"
 echo "script_wdr: ${script_wdr}"
 echo "========================================"
 
@@ -116,6 +119,10 @@ if [ "${deg_method}" != "limma" ] && [ "${deg_method}" != "deseq2" ]; then
     fail_task "Invalid deg_method: ${deg_method}. Allowed values: limma, deseq2."
 fi
 
+if [ "${use_padj}" != "TRUE" ] && [ "${use_padj}" != "FALSE" ]; then
+    fail_task "Invalid use_padj: ${use_padj}. Allowed values: TRUE, FALSE."
+fi
+
 echo "Running run_module3_all.sh..."
 
 bash "${script_wdr}/run/run_module3_all.sh" \
@@ -133,7 +140,8 @@ bash "${script_wdr}/run/run_module3_all.sh" \
     "${logfc_cutoff_mrna}" \
     "${padj_cutoff_mrna}" \
     "${deg_method}" \
-    "${map_info_csv}"
+    "${map_info_csv}" \
+    "${use_padj}"
 
 script_exit_code=$?
 finished_time=$(date +"%Y-%m-%d %H:%M:%S")

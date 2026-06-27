@@ -147,6 +147,22 @@ PAIRED_COHORT_SURVIVAL_GROUPS = [
 ]
 
 
+# DEG pathway / GSEA result file.
+PAIRED_COHORT_MRNA_GSEA_FILENAME_SUFFIX = "_mRNA_gsea.csv"
+
+PAIRED_COHORT_MRNA_GSEA_REQUIRED_COLUMNS = {
+    "Term",
+    "NES",
+    "FDR q-val",
+}
+
+
+# CMap result file.
+PAIRED_COHORT_CMAP_FILENAME_SUFFIX = "_CMap.csv"
+
+PAIRED_COHORT_CMAP_REQUIRED_COLUMNS = set()
+
+
 class PairedCohortTaskInputError(ValueError):
     pass
 
@@ -1033,3 +1049,108 @@ def build_paired_cohort_survival_km_data(
         },
         "groups": groups,
     }
+
+
+def get_paired_cohort_mrna_gsea_file_path(task) -> Path:
+    task_name = str(task.task_name).strip()
+
+    validate_safe_name(task_name, "task_name")
+
+    output_dir = get_paired_cohort_task_output_dir(task)
+
+    file_path = (
+        output_dir / f"{task_name}{PAIRED_COHORT_MRNA_GSEA_FILENAME_SUFFIX}"
+    ).resolve()
+
+    if not str(file_path).startswith(str(output_dir)):
+        raise PairedCohortTaskPathError(
+            "Invalid paired cohort mRNA GSEA result file path."
+        )
+
+    return file_path
+
+
+def validate_paired_cohort_mrna_gsea_file(task) -> Path:
+    file_path = get_paired_cohort_mrna_gsea_file_path(task)
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"Paired cohort mRNA GSEA result file not found: {file_path.name}"
+        )
+
+    return file_path
+
+
+def read_paired_cohort_mrna_gsea_file(task) -> tuple[Path, pd.DataFrame]:
+    file_path = validate_paired_cohort_mrna_gsea_file(task)
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as e:
+        raise PairedCohortTaskInputError(
+            f"Failed to read paired cohort mRNA GSEA result file: {str(e)}"
+        )
+
+    missing_columns = PAIRED_COHORT_MRNA_GSEA_REQUIRED_COLUMNS - set(df.columns)
+
+    if missing_columns:
+        raise PairedCohortTaskInputError(
+            "Paired cohort mRNA GSEA result file is missing required column(s): "
+            f"{', '.join(sorted(missing_columns))}."
+        )
+
+    return file_path, df
+
+
+def get_paired_cohort_cmap_file_path(task) -> Path:
+    task_name = str(task.task_name).strip()
+
+    validate_safe_name(task_name, "task_name")
+
+    output_dir = get_paired_cohort_task_output_dir(task)
+
+    file_path = (
+        output_dir / f"{task_name}{PAIRED_COHORT_CMAP_FILENAME_SUFFIX}"
+    ).resolve()
+
+    if not str(file_path).startswith(str(output_dir)):
+        raise PairedCohortTaskPathError(
+            "Invalid paired cohort CMap result file path."
+        )
+
+    return file_path
+
+
+def validate_paired_cohort_cmap_file(task) -> Path:
+    file_path = get_paired_cohort_cmap_file_path(task)
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"Paired cohort CMap result file not found: {file_path.name}"
+        )
+
+    return file_path
+
+
+def read_paired_cohort_cmap_file(task) -> tuple[Path, pd.DataFrame]:
+    file_path = validate_paired_cohort_cmap_file(task)
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as e:
+        raise PairedCohortTaskInputError(
+            f"Failed to read paired cohort CMap result file: {str(e)}"
+        )
+
+    if df.empty:
+        return file_path, df
+
+    missing_columns = PAIRED_COHORT_CMAP_REQUIRED_COLUMNS - set(df.columns)
+
+    if missing_columns:
+        raise PairedCohortTaskInputError(
+            "Paired cohort CMap result file is missing required column(s): "
+            f"{', '.join(sorted(missing_columns))}."
+        )
+
+    return file_path, df
