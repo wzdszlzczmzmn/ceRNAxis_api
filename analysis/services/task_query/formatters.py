@@ -166,3 +166,45 @@ def format_paired_cohort_task(task, position=0) -> dict:
         "available_deg_rna_types": available_deg_rna_types,
         "available_background_types": available_background_types,
     }
+
+
+def format_hybrid_reference_task(task, position=0) -> dict:
+    return {
+        "uuid": str(task.uuid),
+        "status": task.status,
+        "position": position,
+
+        "task_name": task.task_name,
+        "map_info": task.map_info,
+        "tcga_type": task.tcga_type,
+        "lncrna_type": task.lncrna_type,
+        "deg_method": task.deg_method,
+        "use_padj": getattr(task, "use_padj", True),
+
+        "create_time": format_datetime(task.create_time),
+        "finish_time": format_datetime(task.finish_time),
+
+        "files": {
+            "mrna_file": getattr(task, "mrna_file", ""),
+            "meta_file": getattr(task, "meta_file", ""),
+        },
+
+        "uploaded_rna_types": [
+            rna_type
+            for rna_type, file_value in [
+                ("mRNA", getattr(task, "mrna_file", "")),
+            ]
+            if file_value
+        ],
+
+        "cutoffs": {
+            "mRNA": {
+                "logfc_cutoff": task.logfc_cutoff_mrna,
+                "pvalue_cutoff": task.padj_cutoff_mrna,
+            },
+        },
+
+        "available_deg_rna_types": [
+            "mRNA",
+        ],
+    }

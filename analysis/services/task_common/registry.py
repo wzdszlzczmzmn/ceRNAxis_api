@@ -3,7 +3,7 @@ from typing import Type
 
 from django.db import models
 
-from analysis.models import CustomListQueryTask, PairedCohortTask
+from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,10 @@ TASK_MODEL_REGISTRY = [
     TaskModelConfig(
         task_type="PairedCohortTask",
         model=PairedCohortTask,
+    ),
+    TaskModelConfig(
+        task_type="HybridReferenceTask",
+        model=HybridReferenceTask,
     ),
 ]
 
