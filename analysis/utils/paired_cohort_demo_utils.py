@@ -46,6 +46,31 @@ PAIRED_COHORT_DEMO_VALID_RNA_TYPES = list(
 )
 
 
+PAIRED_COHORT_DEMO_ALLOWED_CANCER_TYPES = [
+    "MEL",
+    "LUAD",
+    "OS",
+    "STAD",
+    "BRCA",
+    "CRC",
+    "NSCLC",
+    "OV",
+    "LUSC",
+    "UCEC",
+    "CESC",
+    "HCC",
+    "AML",
+    "ALL",
+    "PRAD",
+    "SCLC",
+    "NBL",
+    "MM",
+    "Lymphoma",
+    "PAAD",
+    "",
+]
+
+
 class PairedCohortDemoError(ValueError):
     pass
 
@@ -366,7 +391,9 @@ def validate_paired_cohort_demo_input(config: dict) -> None:
 
     task_name = str(config.get("task_name", "")).strip()
     map_info = str(config.get("map_info", "")).strip()
+    cancer_type = str(config.get("cancer_type", "")).strip()
     deg_method = str(config.get("deg_method", "")).strip()
+    use_padj = config.get("use_padj", True)
 
     if not task_name:
         raise PairedCohortDemoConfigError(
@@ -376,6 +403,18 @@ def validate_paired_cohort_demo_input(config: dict) -> None:
     if not map_info:
         raise PairedCohortDemoConfigError(
             "Demo input is missing field: map_info."
+        )
+
+    if cancer_type not in PAIRED_COHORT_DEMO_ALLOWED_CANCER_TYPES:
+        raise PairedCohortDemoConfigError(
+            "Invalid demo cancer_type. Allowed values are: "
+            f"{', '.join([x for x in PAIRED_COHORT_DEMO_ALLOWED_CANCER_TYPES if x])} "
+            "or empty string."
+        )
+
+    if not isinstance(use_padj, bool):
+        raise PairedCohortDemoConfigError(
+            "Demo input field 'use_padj' must be a boolean."
         )
 
     if deg_method not in PAIRED_COHORT_DEMO_ALLOWED_DEG_METHODS:

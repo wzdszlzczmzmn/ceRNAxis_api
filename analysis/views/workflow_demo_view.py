@@ -250,9 +250,17 @@ class PairedCohortDemoRunView(APIView):
                 demo_input.get("map_info", "")
             ).strip()
 
+            cancer_type = str(
+                demo_input.get("cancer_type", "")
+            ).strip()
+
             deg_method = str(
                 demo_input.get("deg_method", "")
             ).strip()
+
+            use_padj = bool(
+                demo_input.get("use_padj", True)
+            )
 
             if not task_name:
                 return Response(
@@ -335,6 +343,8 @@ class PairedCohortDemoRunView(APIView):
                 status=PairedCohortTask.Status.Pending,
                 map_info=map_info,
                 deg_method=deg_method,
+                cancer_type=cancer_type,
+                use_padj=use_padj,
                 **cutoff_fields,
             )
 
@@ -429,6 +439,8 @@ class PairedCohortDemoRunView(APIView):
                         ).strftime("%Y-%m-%d %H:%M:%S"),
                         "map_info": task.map_info,
                         "deg_method": task.deg_method,
+                        "cancer_type": task.cancer_type,
+                        "use_padj": task.use_padj,
                         "is_demo": True,
                         "files": {
                             "mrna_file": task.mrna_file,

@@ -2,6 +2,8 @@
   "task_type": "PairedCohortTask",
   "task_name": "demo_task",
   "map_info": "ImmiRImmiR_LUAD",
+  "cancer_type": "LUAD",
+  "use_padj": false,
   "deg_method": "limma",
   "files": {
     "mrna_file": "mrna.csv",
