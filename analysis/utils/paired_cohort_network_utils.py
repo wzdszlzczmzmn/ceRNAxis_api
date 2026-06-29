@@ -32,38 +32,6 @@ PAIRED_COHORT_IMMUNE_AXIS_REQUIRED_COLUMNS = {
 }
 
 
-def get_paired_cohort_cerna_axis_file_path(task) -> Path:
-    task_name = str(task.task_name).strip()
-
-    validate_safe_name(task_name, "task_name")
-
-    output_dir = get_paired_cohort_task_output_dir(task)
-    file_path = (output_dir / f"{task_name}_ceRNA_axis.csv").resolve()
-
-    if not str(file_path).startswith(str(output_dir)):
-        raise PairedCohortTaskPathError(
-            "Invalid paired cohort ceRNA axis file path."
-        )
-
-    return file_path
-
-
-def get_paired_cohort_immune_axis_file_path(task) -> Path:
-    task_name = str(task.task_name).strip()
-
-    validate_safe_name(task_name, "task_name")
-
-    output_dir = get_paired_cohort_task_output_dir(task)
-    file_path = (output_dir / f"{task_name}_map_immune_axis.csv").resolve()
-
-    if not str(file_path).startswith(str(output_dir)):
-        raise PairedCohortTaskPathError(
-            "Invalid paired cohort immune axis file path."
-        )
-
-    return file_path
-
-
 def paired_cohort_rna_file_node_key(name: str, rna_type: str) -> str:
     return f"rna:{rna_type}:{name}"
 

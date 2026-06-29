@@ -1,13 +1,4 @@
 import math
-import uuid as uuid_lib
-
-
-def is_valid_uuid(value: str) -> bool:
-    try:
-        uuid_lib.UUID(str(value))
-        return True
-    except ValueError:
-        return False
 
 
 def normalize_rna_name(name: str) -> str:

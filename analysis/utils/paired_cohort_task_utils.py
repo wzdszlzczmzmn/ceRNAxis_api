@@ -3,8 +3,11 @@ import csv
 import math
 
 import pandas as pd
-from lifelines import KaplanMeierFitter
-from lifelines.statistics import logrank_test
+
+from analysis.utils.workflow_detail_utils.deg_pathway_utils import DEG_PATHWAY_REQUIRED_COLUMNS, \
+    validate_deg_pathway_dataframe_columns, DEGPathwayInputError, build_deg_pathway_data_from_dataframe
+from analysis.utils.workflow_detail_utils.survival_km_utils import SURVIVAL_REQUIRED_COLUMNS, DEFAULT_SURVIVAL_GROUPS, \
+    validate_survival_dataframe_columns, SurvivalKMInputError, build_survival_km_data_from_dataframe
 
 PAIRED_COHORT_REQUIRED_FILE_FIELDS = [
     "mrna_file",
@@ -135,26 +138,15 @@ PAIRED_COHORT_AXIS_FINAL_REQUIRED_COLUMNS = set(
 # Survival analysis result file.
 PAIRED_COHORT_SURVIVAL_FILENAME_SUFFIX = "_survival_analysis.csv"
 
-PAIRED_COHORT_SURVIVAL_REQUIRED_COLUMNS = {
-    "n_os",
-    "c_os_status",
-    "ceRNA_cluster",
-}
+PAIRED_COHORT_SURVIVAL_REQUIRED_COLUMNS = SURVIVAL_REQUIRED_COLUMNS
 
-PAIRED_COHORT_SURVIVAL_GROUPS = [
-    "Cluster_1",
-    "Cluster_2",
-]
+PAIRED_COHORT_SURVIVAL_GROUPS = DEFAULT_SURVIVAL_GROUPS
 
 
 # DEG pathway / GSEA result file.
 PAIRED_COHORT_MRNA_GSEA_FILENAME_SUFFIX = "_mRNA_gsea.csv"
 
-PAIRED_COHORT_MRNA_GSEA_REQUIRED_COLUMNS = {
-    "Term",
-    "NES",
-    "FDR q-val",
-}
+PAIRED_COHORT_MRNA_GSEA_REQUIRED_COLUMNS = DEG_PATHWAY_REQUIRED_COLUMNS
 
 
 # CMap result file.
@@ -581,234 +573,6 @@ def get_available_paired_cohort_background_types(task) -> list[str]:
     return get_paired_cohort_available_background_types(df)
 
 
-def get_paired_cohort_correlation_file_path(task) -> Path:
-    task_name = str(task.task_name).strip()
-
-    validate_safe_name(task_name, "task_name")
-
-    output_dir = get_paired_cohort_task_output_dir(task)
-
-    file_path = (
-        output_dir / f"{task_name}{PAIRED_COHORT_CORRELATION_FILENAME_SUFFIX}"
-    ).resolve()
-
-    if not str(file_path).startswith(str(output_dir)):
-        raise PairedCohortTaskPathError(
-            "Invalid paired cohort correlation file path."
-        )
-
-    return file_path
-
-
-def validate_paired_cohort_correlation_file(task) -> Path:
-    file_path = get_paired_cohort_correlation_file_path(task)
-
-    if not file_path.exists() or not file_path.is_file():
-        raise FileNotFoundError(
-            f"Paired cohort correlation file not found: {file_path.name}"
-        )
-
-    return file_path
-
-
-def read_paired_cohort_correlation_file(task) -> tuple[Path, pd.DataFrame]:
-    file_path = validate_paired_cohort_correlation_file(task)
-
-    try:
-        df = pd.read_csv(file_path)
-    except Exception as e:
-        raise PairedCohortTaskInputError(
-            f"Failed to read paired cohort correlation file: {str(e)}"
-        )
-
-    missing_columns = PAIRED_COHORT_CORRELATION_REQUIRED_COLUMNS - set(df.columns)
-
-    if missing_columns:
-        raise PairedCohortTaskInputError(
-            "Paired cohort correlation file is missing required column(s): "
-            f"{', '.join(sorted(missing_columns))}."
-        )
-
-    return file_path, df
-
-
-def get_paired_cohort_exp_file_fields_by_type(type_value: str) -> dict:
-    type_value = str(type_value).strip()
-
-    if type_value not in PAIRED_COHORT_TYPE_FILE_FIELD_MAP:
-        raise PairedCohortTaskInputError(
-            "Invalid type. Allowed values are: "
-            f"{', '.join(PAIRED_COHORT_VALID_CORRELATION_TYPES)}."
-        )
-
-    return PAIRED_COHORT_TYPE_FILE_FIELD_MAP[type_value]
-
-
-def normalize_paired_cohort_correlation_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    normalized_df = df.copy()
-
-    for col in ["gene1", "gene2", "type", "correlation type"]:
-        if col in normalized_df.columns:
-            normalized_df[col] = normalized_df[col].astype(str).str.strip()
-
-    return normalized_df
-
-
-def get_paired_cohort_available_correlation_pairs(
-    df: pd.DataFrame,
-) -> list[dict]:
-    normalized_df = normalize_paired_cohort_correlation_dataframe(df)
-
-    normalized_df = normalized_df[
-        normalized_df["type"].isin(PAIRED_COHORT_VALID_CORRELATION_TYPES)
-    ]
-
-    pair_df = (
-        normalized_df[["gene1", "gene2", "type"]]
-        .dropna()
-        .drop_duplicates()
-        .sort_values(["type", "gene1", "gene2"])
-    )
-
-    return [
-        {
-            "gene1": row["gene1"],
-            "gene2": row["gene2"],
-            "type": row["type"],
-        }
-        for _, row in pair_df.iterrows()
-    ]
-
-
-def extract_paired_cohort_correlation_stats(
-    cor_df: pd.DataFrame,
-) -> dict:
-    stats = {
-        "pearson_r": None,
-        "pearson_p": None,
-        "spearman_r": None,
-        "spearman_p": None,
-        "kendall_tau": None,
-        "kendall_p": None,
-    }
-
-    normalized_df = normalize_paired_cohort_correlation_dataframe(cor_df)
-
-    pearson_df = normalized_df[
-        normalized_df["correlation type"] == "Pearson Correlation"
-    ]
-
-    if not pearson_df.empty:
-        row = pearson_df.iloc[0]
-        stats["pearson_r"] = safe_float_or_none(row.get("correlation"))
-        stats["pearson_p"] = safe_float_or_none(row.get("p value"))
-
-    spearman_df = normalized_df[
-        normalized_df["correlation type"] == "Spearman Correlation"
-    ]
-
-    if not spearman_df.empty:
-        row = spearman_df.iloc[0]
-        stats["spearman_r"] = safe_float_or_none(row.get("correlation"))
-        stats["spearman_p"] = safe_float_or_none(row.get("p value"))
-
-    kendall_df = normalized_df[
-        normalized_df["correlation type"] == "Kendall's tau"
-    ]
-
-    if not kendall_df.empty:
-        row = kendall_df.iloc[0]
-        stats["kendall_tau"] = safe_float_or_none(row.get("correlation"))
-        stats["kendall_p"] = safe_float_or_none(row.get("p value"))
-
-    return stats
-
-
-def safe_float_or_none(value):
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return None
-
-    if pd.isna(result) or not math.isfinite(result):
-        return None
-
-    return result
-
-
-def get_paired_cohort_axis_final_file_path(task) -> Path:
-    task_name = str(task.task_name).strip()
-
-    validate_safe_name(task_name, "task_name")
-
-    output_dir = get_paired_cohort_task_output_dir(task)
-
-    file_path = (
-        output_dir / f"{task_name}{PAIRED_COHORT_AXIS_FINAL_FILENAME_SUFFIX}"
-    ).resolve()
-
-    if not str(file_path).startswith(str(output_dir)):
-        raise PairedCohortTaskPathError(
-            "Invalid paired cohort ceRNA axis final file path."
-        )
-
-    return file_path
-
-
-def validate_paired_cohort_axis_final_file(task) -> Path:
-    file_path = get_paired_cohort_axis_final_file_path(task)
-
-    if not file_path.exists() or not file_path.is_file():
-        raise FileNotFoundError(
-            f"Paired cohort ceRNA axis final file not found: {file_path.name}"
-        )
-
-    return file_path
-
-
-def read_paired_cohort_axis_final_file(task) -> tuple[Path, pd.DataFrame]:
-    file_path = validate_paired_cohort_axis_final_file(task)
-
-    try:
-        df = pd.read_csv(file_path)
-    except Exception as e:
-        raise PairedCohortTaskInputError(
-            f"Failed to read paired cohort ceRNA axis final file: {str(e)}"
-        )
-
-    missing_columns = PAIRED_COHORT_AXIS_FINAL_REQUIRED_COLUMNS - set(df.columns)
-
-    if missing_columns:
-        raise PairedCohortTaskInputError(
-            "Paired cohort ceRNA axis final file is missing required column(s): "
-            f"{', '.join(sorted(missing_columns))}."
-        )
-
-    return file_path, df
-
-
-def normalize_paired_cohort_axis_final_dataframe(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
-    normalized_df = df.copy()
-
-    for col in PAIRED_COHORT_AXIS_FINAL_COLUMNS:
-        if col not in normalized_df.columns:
-            continue
-
-        if col.endswith("_log2FC"):
-            normalized_df[col] = pd.to_numeric(
-                normalized_df[col],
-                errors="coerce",
-            )
-        else:
-            normalized_df[col] = normalized_df[col].astype("object")
-
-    normalized_df = normalized_df.replace([float("inf"), float("-inf")], pd.NA)
-
-    return normalized_df[PAIRED_COHORT_AXIS_FINAL_COLUMNS]
-
-
 def get_paired_cohort_survival_file_path(task) -> Path:
     task_name = str(task.task_name).strip()
 
@@ -849,159 +613,18 @@ def read_paired_cohort_survival_file(task) -> tuple[Path, pd.DataFrame]:
             f"Failed to read paired cohort survival analysis file: {str(e)}"
         )
 
-    missing_columns = PAIRED_COHORT_SURVIVAL_REQUIRED_COLUMNS - set(df.columns)
-
-    if missing_columns:
+    try:
+        validate_survival_dataframe_columns(
+            df=df,
+            required_columns=PAIRED_COHORT_SURVIVAL_REQUIRED_COLUMNS,
+        )
+    except SurvivalKMInputError as e:
         raise PairedCohortTaskInputError(
-            "Paired cohort survival analysis file is missing required column(s): "
-            f"{', '.join(sorted(missing_columns))}."
+            "Paired cohort survival analysis file is invalid. "
+            f"{str(e)}"
         )
 
     return file_path, df
-
-
-def normalize_paired_cohort_survival_dataframe(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
-    normalized_df = df.copy()
-
-    normalized_df["n_os"] = pd.to_numeric(
-        normalized_df["n_os"],
-        errors="coerce",
-    )
-
-    normalized_df["c_os_status"] = pd.to_numeric(
-        normalized_df["c_os_status"],
-        errors="coerce",
-    )
-
-    normalized_df["ceRNA_cluster"] = (
-        normalized_df["ceRNA_cluster"]
-        .astype(str)
-        .str.strip()
-    )
-
-    normalized_df = normalized_df.dropna(
-        subset=[
-            "n_os",
-            "c_os_status",
-            "ceRNA_cluster",
-        ]
-    ).copy()
-
-    normalized_df = normalized_df[
-        normalized_df["ceRNA_cluster"].isin(PAIRED_COHORT_SURVIVAL_GROUPS)
-    ].copy()
-
-    normalized_df = normalized_df[
-        normalized_df["n_os"] >= 0
-    ].copy()
-
-    normalized_df = normalized_df[
-        normalized_df["c_os_status"].isin([0, 1])
-    ].copy()
-
-    normalized_df["c_os_status"] = normalized_df["c_os_status"].astype(int)
-
-    return normalized_df
-
-
-def dataframe_to_km_points(
-    survival_df: pd.DataFrame,
-    time_col: str,
-    value_col: str,
-) -> list[dict]:
-    points = []
-
-    for _, row in survival_df.iterrows():
-        time_value = safe_float_or_none(row.get(time_col))
-        survival_value = safe_float_or_none(row.get(value_col))
-
-        if time_value is None or survival_value is None:
-            continue
-
-        points.append(
-            {
-                "time": time_value,
-                "survival": survival_value,
-            }
-        )
-
-    return points
-
-
-def build_single_km_group_data(
-    group_name: str,
-    group_df: pd.DataFrame,
-) -> dict | None:
-    if group_df.empty:
-        return None
-
-    kmf = KaplanMeierFitter()
-
-    kmf.fit(
-        durations=group_df["n_os"],
-        event_observed=group_df["c_os_status"],
-        label=group_name,
-    )
-
-    survival_df = kmf.survival_function_.reset_index()
-    survival_time_col = survival_df.columns[0]
-    survival_value_col = survival_df.columns[1]
-
-    ci_df = kmf.confidence_interval_survival_function_.reset_index()
-    ci_time_col = ci_df.columns[0]
-    ci_lower_col = ci_df.columns[1]
-    ci_upper_col = ci_df.columns[2]
-
-    return {
-        "name": group_name,
-        "n": int(group_df.shape[0]),
-        "event_count": int(group_df["c_os_status"].sum()),
-        "censored_count": int(group_df.shape[0] - group_df["c_os_status"].sum()),
-        "points": dataframe_to_km_points(
-            survival_df=survival_df,
-            time_col=survival_time_col,
-            value_col=survival_value_col,
-        ),
-        "ci_lower": dataframe_to_km_points(
-            survival_df=ci_df,
-            time_col=ci_time_col,
-            value_col=ci_lower_col,
-        ),
-        "ci_upper": dataframe_to_km_points(
-            survival_df=ci_df,
-            time_col=ci_time_col,
-            value_col=ci_upper_col,
-        ),
-    }
-
-
-def calculate_paired_cohort_logrank_p_value(
-    surv_df: pd.DataFrame,
-) -> float | None:
-    group_1_df = surv_df[
-        surv_df["ceRNA_cluster"] == "Cluster_1"
-    ]
-
-    group_2_df = surv_df[
-        surv_df["ceRNA_cluster"] == "Cluster_2"
-    ]
-
-    if group_1_df.empty or group_2_df.empty:
-        return None
-
-    try:
-        result = logrank_test(
-            group_1_df["n_os"],
-            group_2_df["n_os"],
-            event_observed_A=group_1_df["c_os_status"],
-            event_observed_B=group_2_df["c_os_status"],
-        )
-    except Exception:
-        return None
-
-    return safe_float_or_none(result.p_value)
 
 
 def build_paired_cohort_survival_km_data(
@@ -1010,45 +633,16 @@ def build_paired_cohort_survival_km_data(
 ) -> dict:
     survival_file, df = read_paired_cohort_survival_file(task)
 
-    surv_df = normalize_paired_cohort_survival_dataframe(df)
-
-    raw_count = int(df.shape[0])
-    cleaned_count = int(surv_df.shape[0])
-    dropped_count = raw_count - cleaned_count
-
-    groups = []
-
-    for group_name in PAIRED_COHORT_SURVIVAL_GROUPS:
-        group_df = surv_df[
-            surv_df["ceRNA_cluster"] == group_name
-        ].copy()
-
-        group_data = build_single_km_group_data(
-            group_name=group_name,
-            group_df=group_df,
+    try:
+        return build_survival_km_data_from_dataframe(
+            task=task,
+            survival_file_name=survival_file.name,
+            df=df,
+            title=title,
+            valid_groups=PAIRED_COHORT_SURVIVAL_GROUPS,
         )
-
-        if group_data is not None:
-            groups.append(group_data)
-
-    logrank_p = calculate_paired_cohort_logrank_p_value(surv_df)
-
-    return {
-        "uuid": str(task.uuid),
-        "task_name": task.task_name,
-        "survival_file": survival_file.name,
-        "title": title,
-        "x_label": "Time days",
-        "y_label": "Overall survival probability",
-        "summary": {
-            "raw_count": raw_count,
-            "cleaned_count": cleaned_count,
-            "dropped_count": dropped_count,
-            "group_count": len(groups),
-            "logrank_p": logrank_p,
-        },
-        "groups": groups,
-    }
+    except SurvivalKMInputError as e:
+        raise PairedCohortTaskInputError(str(e))
 
 
 def get_paired_cohort_mrna_gsea_file_path(task) -> Path:
@@ -1091,66 +685,32 @@ def read_paired_cohort_mrna_gsea_file(task) -> tuple[Path, pd.DataFrame]:
             f"Failed to read paired cohort mRNA GSEA result file: {str(e)}"
         )
 
-    missing_columns = PAIRED_COHORT_MRNA_GSEA_REQUIRED_COLUMNS - set(df.columns)
-
-    if missing_columns:
+    try:
+        validate_deg_pathway_dataframe_columns(
+            df=df,
+            required_columns=PAIRED_COHORT_MRNA_GSEA_REQUIRED_COLUMNS,
+        )
+    except DEGPathwayInputError as e:
         raise PairedCohortTaskInputError(
-            "Paired cohort mRNA GSEA result file is missing required column(s): "
-            f"{', '.join(sorted(missing_columns))}."
+            "Paired cohort mRNA GSEA result file is invalid. "
+            f"{str(e)}"
         )
 
     return file_path, df
 
 
-def get_paired_cohort_cmap_file_path(task) -> Path:
-    task_name = str(task.task_name).strip()
-
-    validate_safe_name(task_name, "task_name")
-
-    output_dir = get_paired_cohort_task_output_dir(task)
-
-    file_path = (
-        output_dir / f"{task_name}{PAIRED_COHORT_CMAP_FILENAME_SUFFIX}"
-    ).resolve()
-
-    if not str(file_path).startswith(str(output_dir)):
-        raise PairedCohortTaskPathError(
-            "Invalid paired cohort CMap result file path."
-        )
-
-    return file_path
-
-
-def validate_paired_cohort_cmap_file(task) -> Path:
-    file_path = get_paired_cohort_cmap_file_path(task)
-
-    if not file_path.exists() or not file_path.is_file():
-        raise FileNotFoundError(
-            f"Paired cohort CMap result file not found: {file_path.name}"
-        )
-
-    return file_path
-
-
-def read_paired_cohort_cmap_file(task) -> tuple[Path, pd.DataFrame]:
-    file_path = validate_paired_cohort_cmap_file(task)
+def build_paired_cohort_deg_pathway_data(
+    task,
+    title: str = "DEG Pathway Enrichment",
+) -> dict:
+    gsea_file, df = read_paired_cohort_mrna_gsea_file(task)
 
     try:
-        df = pd.read_csv(file_path)
-    except Exception as e:
-        raise PairedCohortTaskInputError(
-            f"Failed to read paired cohort CMap result file: {str(e)}"
+        return build_deg_pathway_data_from_dataframe(
+            task=task,
+            gsea_file_name=gsea_file.name,
+            df=df,
+            title=title,
         )
-
-    if df.empty:
-        return file_path, df
-
-    missing_columns = PAIRED_COHORT_CMAP_REQUIRED_COLUMNS - set(df.columns)
-
-    if missing_columns:
-        raise PairedCohortTaskInputError(
-            "Paired cohort CMap result file is missing required column(s): "
-            f"{', '.join(sorted(missing_columns))}."
-        )
-
-    return file_path, df
+    except DEGPathwayInputError as e:
+        raise PairedCohortTaskInputError(str(e))

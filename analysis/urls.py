@@ -2,6 +2,9 @@ from django.urls import path
 
 from analysis.views import workflow_views, workflow_submit_views, workflow_query_views, workflow_detail_views, \
     workflow_demo_view
+from analysis.views.workflow_detail_each_views import workflow_uploaded_file_views, workflow_network_views, \
+    workflow_axis_final_views, workflow_cmap_views, workflow_log2fc_correlation_views, workflow_deg_volcano_views, \
+    workflow_exp_correlation_views, workflow_survival_views, workflow_deg_pathway_views
 
 urlpatterns = [
     path('immune_annotations/', workflow_views.WorkflowImmuneAnnotationListView.as_view(),
@@ -13,24 +16,55 @@ urlpatterns = [
     path('custom_list_query_task_submit/', workflow_submit_views.CustomListQueryTaskSubmitView.as_view(),
          name='custom_list_query_task_submit'),
     path('query_task/', workflow_query_views.QueryTaskView.as_view(), name='query_task'),
-    path('custom_list_query_network/', workflow_detail_views.CustomListQueryTaskNetworkView.as_view(),
+
+    # Task Network Views
+    path('custom_list_query_network/', workflow_network_views.CustomListQueryTaskNetworkView.as_view(),
          name='custom_list_query_network'),
+    path('paired_cohort_task_network/', workflow_network_views.PairedCohortTaskNetworkView.as_view(),
+         name='paired_cohort_task_network'),
+    path('hybrid_reference_task_network/', workflow_network_views.HybridReferenceTaskNetworkView.as_view(),
+         name='hybrid_reference_task_network'),
+
+
     path('paired_cohort_task_submit/', workflow_submit_views.PairedCohortTaskSubmitView.as_view(),
          name='paired_cohort_task_submit'),
-    path('paired_cohort_uploaded_file_download/', workflow_detail_views.PairedCohortUploadedFileDownloadView.as_view(),
+
+    # Uploaded File Download Views
+    path('paired_cohort_uploaded_file_download/',
+         workflow_uploaded_file_views.PairedCohortUploadedFileDownloadView.as_view(),
          name='paired_cohort_uploaded_file_download'),
-    path('paired_cohort_deg_volcano/', workflow_detail_views.PairedCohortDEGVolcanoView.as_view(),
+    path('hybrid_reference_uploaded_file_download/',
+         workflow_uploaded_file_views.HybridReferenceUploadedFileDownloadView.as_view(),
+         name='hybrid_reference_uploaded_file_download'
+         ),
+
+    # DEG Volcano Views
+    path('paired_cohort_deg_volcano/', workflow_deg_volcano_views.PairedCohortDEGVolcanoView.as_view(),
          name='paired_cohort_deg_volcano'),
-    path('paired_cohort_correlation/', workflow_detail_views.PairedCohortLog2FCCorrelationView.as_view(),
+    path('hybrid_reference_deg_volcano/', workflow_deg_volcano_views.HybridReferenceDEGVolcanoView.as_view(),
+         name='hybrid_reference_deg_volcano'),
+
+    # Log2FC Correlation Views
+    path('paired_cohort_correlation/', workflow_log2fc_correlation_views.PairedCohortLog2FCCorrelationView.as_view(),
          name='paired_cohort_correlation'),
+    path('hybrid_reference_correlation/',
+         workflow_log2fc_correlation_views.HybridReferenceLog2FCCorrelationView.as_view(),
+         name='hybrid_reference_correlation'),
+
+    # Exp Correlation Views
     path('paired_cohort_exp_correlation_options/',
-         workflow_detail_views.PairedCohortExpCorrelationOptionsView.as_view(),
+         workflow_exp_correlation_views.PairedCohortExpCorrelationOptionsView.as_view(),
          name='paired_cohort_exp_correlation_options'),
     path('paired_cohort_exp_correlation_plot_data/',
-         workflow_detail_views.PairedCohortExpCorrelationPlotDataView.as_view(),
+         workflow_exp_correlation_views.PairedCohortExpCorrelationPlotDataView.as_view(),
          name='paired_cohort_exp_correlation_plot_data'),
-    path('paired_cohort_task_network/', workflow_detail_views.PairedCohortTaskNetworkView.as_view(),
-         name='paired_cohort_task_network'),
+    path('hybrid_reference_exp_correlation_options/',
+         workflow_exp_correlation_views.HybridReferenceExpCorrelationOptionsView.as_view(),
+         name='hybrid_reference_exp_correlation_options'),
+    path('hybrid_reference_exp_correlation_plot_data/',
+         workflow_exp_correlation_views.HybridReferenceExpCorrelationPlotDataView.as_view(),
+         name='hybrid_reference_exp_correlation_plot_data'),
+
     path('workflow_task_result_download/', workflow_detail_views.WorkflowTaskResultDownloadView.as_view(),
          name='workflow_task_result_download'),
     path('paired_cohort_demo_info/', workflow_demo_view.PairedCohortDemoInfoView.as_view(),
@@ -47,14 +81,31 @@ urlpatterns = [
          name='custom_list_query_run_demo'),
     path('paired_cohort_run_demo/', workflow_demo_view.PairedCohortDemoRunView.as_view(),
          name='paired_cohort_run_demo'),
-    path('paired_cohort_axis_final/', workflow_detail_views.PairedCohortAxisFinalDataView.as_view(),
+
+    # Axis Final Views
+    path('paired_cohort_axis_final/', workflow_axis_final_views.PairedCohortAxisFinalDataView.as_view(),
          name='paired_cohort_axis_final'),
-    path('paired_cohort_survival_km/', workflow_detail_views.PairedCohortSurvivalKMDataView.as_view(),
+    path('hybrid_reference_axis_final/', workflow_axis_final_views.HybridReferenceAxisFinalDataView.as_view(),
+         name='hybrid_reference_axis_final'),
+
+    # Survival Views
+    path('paired_cohort_survival_km/', workflow_survival_views.PairedCohortSurvivalKMDataView.as_view(),
          name='paired_cohort_survival_km'),
+    path('hybrid_reference_survival_km/', workflow_survival_views.HybridReferenceSurvivalKMDataView.as_view(),
+         name='hybrid_reference_survival_km'),
+
     path('hybrid_reference_task_submit/', workflow_submit_views.HybridReferenceTaskSubmitView.as_view(),
          name='hybrid_reference_task_submit'),
-    path('paired_cohort_deg_pathway/', workflow_detail_views.PairedCohortDEGPathwayView.as_view(),
+
+    # DEG Pathway Views
+    path('paired_cohort_deg_pathway/', workflow_deg_pathway_views.PairedCohortDEGPathwayView.as_view(),
          name='paired_cohort_deg_pathway'),
-    path('paired_cohort_cmap_result/', workflow_detail_views.PairedCohortCMapResultView.as_view(),
+    path('hybrid_reference_deg_pathway/', workflow_deg_pathway_views.HybridReferenceDEGPathwayView.as_view(),
+         name='hybrid_reference_deg_pathway'),
+
+    # CMap Views
+    path('paired_cohort_cmap_result/', workflow_cmap_views.PairedCohortCMapResultView.as_view(),
          name='paired_cohort_cmap_result'),
+    path('hybrid_reference_cmap_result/', workflow_cmap_views.HybridReferenceCMapResultView.as_view(),
+         name='hybrid_reference_cmap_result'),
 ]
