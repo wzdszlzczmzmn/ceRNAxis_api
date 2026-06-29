@@ -17,4 +17,6 @@ class DatasetMetadataSerializer(serializers.ModelSerializer):
             "gene_bio_type",
             "workflow",
             "sample_nums",
+            "cell_nums",
+            "spot_nums",
         ]

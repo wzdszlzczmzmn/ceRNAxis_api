@@ -19,7 +19,39 @@ class Command(BaseCommand):
         "c_gene_bio_type",
         "c_workflow",
         "n_sample_nums",
+        "n_cell_nums",
+        "n_spot_nums",
     ]
+
+    TEXT_COLUMNS = [
+        "dataset",
+        "c_programme",
+        "c_obs_type",
+        "c_reference",
+        "c_cancer_type",
+        "c_cancer_type_full_name",
+        "c_gene_bio_type",
+        "c_workflow",
+    ]
+
+    COUNT_COLUMNS = [
+        "n_sample_nums",
+        "n_cell_nums",
+        "n_spot_nums",
+    ]
+
+    VALID_GENE_BIO_TYPES = {
+        "miRNA",
+        "mRNA",
+        "lncRNA",
+        "circRNA",
+    }
+
+    VALID_OBS_TYPES = {
+        "sample",
+        "cell",
+        "spot",
+    }
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -50,7 +82,8 @@ class Command(BaseCommand):
             raise CommandError(f"Failed to read xlsx file: {e}")
 
         missing_columns = [
-            col for col in self.REQUIRED_COLUMNS if col not in df.columns
+            col for col in self.REQUIRED_COLUMNS
+            if col not in df.columns
         ]
 
         if missing_columns:
@@ -59,26 +92,63 @@ class Command(BaseCommand):
             )
 
         df = df[self.REQUIRED_COLUMNS].copy()
+        raw_count = len(df)
 
-        # 清理空行：dataset 为空的行直接忽略
-        df = df.dropna(subset=["dataset"])
+        # dataset 为空的行没有业务意义
+        df = df.dropna(subset=["dataset"]).copy()
 
-        # 将 NaN 转为空字符串，避免 CharField 写入 nan
-        text_columns = [
-            "dataset",
-            "c_programme",
-            "c_obs_type",
-            "c_reference",
-            "c_cancer_type",
-            "c_cancer_type_full_name",
-            "c_gene_bio_type",
-            "c_workflow",
-        ]
-
-        for col in text_columns:
+        for col in self.TEXT_COLUMNS:
             df[col] = df[col].fillna("").astype(str).str.strip()
 
-        df["n_sample_nums"] = df["n_sample_nums"].fillna(0).astype(int)
+        # 清洗后 dataset 为空字符串的行继续丢弃
+        df = df[df["dataset"] != ""].copy()
+
+        invalid_obs_types = sorted(
+            set(df["c_obs_type"]) - self.VALID_OBS_TYPES
+        )
+        if invalid_obs_types:
+            raise CommandError(
+                "Invalid c_obs_type values: "
+                + ", ".join(invalid_obs_types)
+            )
+
+        invalid_gene_types = sorted(
+            set(df["c_gene_bio_type"]) - self.VALID_GENE_BIO_TYPES
+        )
+        if invalid_gene_types:
+            raise CommandError(
+                "Invalid c_gene_bio_type values: "
+                + ", ".join(invalid_gene_types)
+            )
+
+        duplicated_datasets = (
+            df[df.duplicated(subset=["dataset"], keep=False)]["dataset"]
+            .drop_duplicates()
+            .tolist()
+        )
+
+        if duplicated_datasets:
+            raise CommandError(
+                "Duplicated dataset values in input file: "
+                + ", ".join(duplicated_datasets[:20])
+            )
+
+        for col in self.COUNT_COLUMNS:
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce",
+            ).fillna(0)
+
+            negative_rows = df[df[col] < 0]
+            if not negative_rows.empty:
+                raise CommandError(
+                    f"{col} contains negative values: "
+                    + ", ".join(
+                        negative_rows["dataset"].head(10).tolist()
+                    )
+                )
+
+            df[col] = df[col].astype(int)
 
         objects = []
 
@@ -94,6 +164,8 @@ class Command(BaseCommand):
                     gene_bio_type=row["c_gene_bio_type"],
                     workflow=row["c_workflow"],
                     sample_nums=row["n_sample_nums"],
+                    cell_nums=row["n_cell_nums"],
+                    spot_nums=row["n_spot_nums"],
                 )
             )
 
@@ -118,12 +190,18 @@ class Command(BaseCommand):
                     "gene_bio_type",
                     "workflow",
                     "sample_nums",
+                    "cell_nums",
+                    "spot_nums",
                 ],
                 unique_fields=["dataset"],
             )
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Successfully imported {len(objects)} dataset metadata records."
+                (
+                    f"Successfully imported {len(objects)} dataset metadata "
+                    f"records. Raw rows: {raw_count}, "
+                    f"ignored rows: {raw_count - len(df)}."
+                )
             )
         )

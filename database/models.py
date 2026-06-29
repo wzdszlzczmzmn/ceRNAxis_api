@@ -165,14 +165,35 @@ class DatasetMetadata(models.Model):
         ("circRNA", "circRNA"),
     ]
 
+    OBS_TYPE_CHOICES = [
+        ("sample", "sample"),
+        ("cell", "cell"),
+        ("spot", "spot"),
+    ]
+
     dataset = models.CharField(max_length=100, unique=True)
 
     programme = models.CharField(max_length=50)
-    obs_type = models.CharField(max_length=50)
-    reference = models.CharField(max_length=50)
+
+    obs_type = models.CharField(
+        max_length=50,
+        choices=OBS_TYPE_CHOICES,
+        db_index=True,
+    )
+
+    reference = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+    )
 
     cancer_type = models.CharField(max_length=50)
-    cancer_type_full_name = models.CharField(max_length=255)
+
+    cancer_type_full_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
 
     gene_bio_type = models.CharField(
         max_length=20,
@@ -187,16 +208,22 @@ class DatasetMetadata(models.Model):
     )
 
     sample_nums = models.PositiveIntegerField(default=0)
+    cell_nums = models.PositiveIntegerField(default=0)
+    spot_nums = models.PositiveIntegerField(default=0)
 
     class Meta:
         db_table = "dataset_metadata"
         indexes = [
             models.Index(fields=["programme"]),
+            models.Index(fields=["obs_type"]),
             models.Index(fields=["cancer_type"]),
             models.Index(fields=["gene_bio_type"]),
             models.Index(fields=["reference"]),
             models.Index(fields=["programme", "cancer_type"]),
             models.Index(fields=["cancer_type", "gene_bio_type"]),
+            models.Index(fields=["programme", "obs_type"]),
+            models.Index(fields=["programme", "obs_type", "gene_bio_type"]),
+            models.Index(fields=["obs_type", "gene_bio_type"]),
         ]
 
     def __str__(self):

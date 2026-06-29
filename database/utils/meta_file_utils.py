@@ -51,3 +51,38 @@ def get_dataset_meta_file(dataset: str, expression_mode: str) -> Path:
     raise DatasetMetaPathError(
         f"Invalid expression_mode '{expression_mode}'."
     )
+
+
+def get_large_meta_base_dir(expression_mode: str) -> Path:
+    if expression_mode == "tisch2":
+        return Path(settings.TISCH2_DATASET_BASE_DIR).resolve()
+
+    if expression_mode == "scTML":
+        return Path(settings.SCTML_DATASET_BASE_DIR).resolve()
+
+    raise DatasetMetaPathError(
+        f"Large metadata is not available for expression_mode '{expression_mode}'."
+    )
+
+
+def get_large_meta_filename(dataset: str) -> str:
+    return f"{dataset}_meta.csv"
+
+
+def get_large_meta_file(
+    dataset: str,
+    expression_mode: str,
+) -> Path:
+    validate_dataset(dataset)
+
+    base_dir = get_large_meta_base_dir(expression_mode)
+
+    file_path = (
+        base_dir
+        / get_large_meta_filename(dataset)
+    ).resolve()
+
+    if not str(file_path).startswith(str(base_dir)):
+        raise DatasetMetaPathError("Invalid large metadata file path")
+
+    return file_path

@@ -19,6 +19,15 @@ MAX_SELECTED_GENES = 30
 TIMEDB_RNA_TYPE = "mRNA"
 TIMEDB_EXPRESSION_TYPE = "exp"
 
+TISCH2_RNA_TYPE = "mRNA"
+TISCH2_EXPRESSION_TYPE = "exp"
+TISCH2_EXPRESSION_FILE_FORMAT = "parquet"
+
+SCTML_RNA_TYPE = "mRNA"
+SCTML_EXPRESSION_TYPE = "exp"
+SCTML_EXPRESSION_FILE_FORMAT = "parquet"
+SCTML_EXPRESSION_MODE = "scTML"
+
 ALIQUOT_EXPRESSION_VALUE_TYPES_BY_RNA_TYPE = {
     "mRNA": {"count", "tpm", "fpkm", "fpkmuq"},
     "lncRNA": {"count", "tpm", "fpkm", "fpkmuq"},
@@ -363,7 +372,16 @@ def get_available_timedb_expression_types(
 
 
 def get_expression_mode_from_metadata(metadata) -> str:
-    if metadata.programme == "TCGA":
+    obs_type = str(metadata.obs_type or "").strip().lower()
+    programme = str(metadata.programme or "").strip().upper()
+
+    if obs_type == "cell":
+        return "tisch2"
+
+    if obs_type == "spot":
+        return "scTML"
+
+    if programme == "TCGA":
         return "tcga"
 
     return "timedb"
@@ -408,6 +426,38 @@ def resolve_dataset_expression_file(
             dataset=dataset,
             rna_type=rna_type,
             file_format=file_format,
+        )
+
+        return file_path, file_format
+
+    if expression_mode == "scTML":
+        if expression_type != SCTML_EXPRESSION_TYPE:
+            raise ExpressionPathError(
+                f"Invalid scTML expression_type '{expression_type}'. "
+                f"Allowed value: '{SCTML_EXPRESSION_TYPE}'."
+            )
+
+        file_format = SCTML_EXPRESSION_FILE_FORMAT
+
+        file_path = validate_sctml_expression_file(
+            dataset=dataset,
+            rna_type=rna_type,
+        )
+
+        return file_path, file_format
+
+    if expression_mode == "tisch2":
+        if expression_type != TISCH2_EXPRESSION_TYPE:
+            raise ExpressionPathError(
+                f"Invalid TISCH2 expression_type '{expression_type}'. "
+                f"Allowed value: '{TISCH2_EXPRESSION_TYPE}'."
+            )
+
+        file_format = TISCH2_EXPRESSION_FILE_FORMAT
+
+        file_path = validate_tisch2_expression_file(
+            dataset=dataset,
+            rna_type=rna_type,
         )
 
         return file_path, file_format
@@ -460,6 +510,148 @@ def read_expression_data(
     raise ExpressionPathError(
         f"Unsupported expression file_format '{file_format}'."
     )
+
+
+def get_tisch2_dataset_base_dir() -> Path:
+    return Path(settings.TISCH2_DATASET_BASE_DIR).resolve()
+
+
+def validate_tisch2_rna_type(rna_type: str) -> None:
+    if rna_type != TISCH2_RNA_TYPE:
+        raise ExpressionPathError(
+            f"Invalid TISCH2 rna_type. Allowed value: '{TISCH2_RNA_TYPE}'"
+        )
+
+
+def get_tisch2_expression_filename(dataset: str) -> str:
+    return f"{dataset}_exp.{TISCH2_EXPRESSION_FILE_FORMAT}"
+
+
+def get_tisch2_expression_file_path(
+    dataset: str,
+    rna_type: str,
+) -> Path:
+    validate_dataset(dataset)
+    validate_tisch2_rna_type(rna_type)
+
+    base_dir = get_tisch2_dataset_base_dir()
+
+    file_path = (
+        base_dir
+        / get_tisch2_expression_filename(dataset=dataset)
+    ).resolve()
+
+    if not str(file_path).startswith(str(base_dir)):
+        raise ExpressionPathError("Invalid TISCH2 expression file path")
+
+    return file_path
+
+
+def validate_tisch2_expression_file(
+    dataset: str,
+    rna_type: str,
+) -> Path:
+    file_path = get_tisch2_expression_file_path(
+        dataset=dataset,
+        rna_type=rna_type,
+    )
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"TISCH2 expression file not found for dataset '{dataset}', "
+            f"rna_type '{rna_type}', file_format '{TISCH2_EXPRESSION_FILE_FORMAT}'."
+        )
+
+    return file_path
+
+
+def get_available_tisch2_expression_types(
+    dataset: str,
+    rna_type: str,
+) -> list[str]:
+    validate_dataset(dataset)
+    validate_tisch2_rna_type(rna_type)
+
+    file_path = get_tisch2_expression_file_path(
+        dataset=dataset,
+        rna_type=rna_type,
+    )
+
+    if file_path.exists() and file_path.is_file():
+        return [TISCH2_EXPRESSION_TYPE]
+
+    return []
+
+
+def get_sctml_dataset_base_dir() -> Path:
+    return Path(settings.SCTML_DATASET_BASE_DIR).resolve()
+
+
+def validate_sctml_rna_type(rna_type: str) -> None:
+    if rna_type != SCTML_RNA_TYPE:
+        raise ExpressionPathError(
+            f"Invalid scTML rna_type. Allowed value: '{SCTML_RNA_TYPE}'"
+        )
+
+
+def get_sctml_expression_filename(dataset: str) -> str:
+    return f"{dataset}_exp.{SCTML_EXPRESSION_FILE_FORMAT}"
+
+
+def get_sctml_expression_file_path(
+    dataset: str,
+    rna_type: str,
+) -> Path:
+    validate_dataset(dataset)
+    validate_sctml_rna_type(rna_type)
+
+    base_dir = get_sctml_dataset_base_dir()
+
+    file_path = (
+        base_dir
+        / get_sctml_expression_filename(dataset=dataset)
+    ).resolve()
+
+    if not str(file_path).startswith(str(base_dir)):
+        raise ExpressionPathError("Invalid scTML expression file path")
+
+    return file_path
+
+
+def validate_sctml_expression_file(
+    dataset: str,
+    rna_type: str,
+) -> Path:
+    file_path = get_sctml_expression_file_path(
+        dataset=dataset,
+        rna_type=rna_type,
+    )
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"scTML expression file not found for dataset '{dataset}', "
+            f"rna_type '{rna_type}', file_format '{SCTML_EXPRESSION_FILE_FORMAT}'."
+        )
+
+    return file_path
+
+
+def get_available_sctml_expression_types(
+    dataset: str,
+    rna_type: str,
+) -> list[str]:
+    validate_dataset(dataset)
+    validate_sctml_rna_type(rna_type)
+
+    file_path = get_sctml_expression_file_path(
+        dataset=dataset,
+        rna_type=rna_type,
+    )
+
+    if file_path.exists() and file_path.is_file():
+        return [SCTML_EXPRESSION_TYPE]
+
+    return []
 
 
 def validate_aliquot_rna_type(rna_type: str) -> None:
