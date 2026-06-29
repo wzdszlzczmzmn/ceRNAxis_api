@@ -165,12 +165,15 @@ def prepare_custom_list_query_workspace(task) -> dict:
     }
 
 
-def get_task_out_prefix(task) -> str:
+def get_immune_result_file_name(task) -> str:
     task_name = str(task.task_name).strip()
     validate_task_name_for_filename(task_name)
 
-    # 如果后续下载逻辑仍按旧 prefix 找文件，可以暂时保留旧命名。
-    return f"{task_name}_map_immune_gene_axis"
+    return f"{task_name}_map_immune_gene.csv"
 
-    # 如果你准备彻底切到新 run_module1.sh 的自然命名，也可以改成：
-    # return task_name
+
+def get_immune_result_file_path(task) -> Path:
+    filename = get_immune_result_file_name(task)
+    output_dir = get_task_output_dir(task)
+
+    return output_dir / filename

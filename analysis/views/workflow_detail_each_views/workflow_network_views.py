@@ -1,6 +1,5 @@
 import csv
 import traceback
-from pathlib import Path
 
 from django.db.models import Q
 
@@ -16,8 +15,7 @@ from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferen
 
 from analysis.utils.custom_list_query_task_utils import (
     ALLOWED_RNA_TYPES,
-    get_task_output_dir,
-    get_task_out_prefix,
+    get_immune_result_file_path,
 )
 
 from analysis.utils.workflow_detail_utils.workflow_network_utils import (
@@ -392,7 +390,7 @@ class CustomListQueryTaskNetworkView(APIView):
             matched_node_map,
             matched_node_name_map,
     ) -> dict:
-        immune_file_path = self.get_immune_result_file_path(task)
+        immune_file_path = get_immune_result_file_path(task)
 
         if not immune_file_path.exists() or not immune_file_path.is_file():
             return {
@@ -628,12 +626,6 @@ class CustomListQueryTaskNetworkView(APIView):
             }
 
         return node_key
-
-    def get_immune_result_file_path(self, task) -> Path:
-        output_dir = get_task_output_dir(task)
-        out_prefix = get_task_out_prefix(task)
-
-        return output_dir / f"{out_prefix}.csv"
 
     @staticmethod
     def format_rna_node(node):

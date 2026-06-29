@@ -1,7 +1,8 @@
 {
   "task_type": "CustomListQueryTask",
   "task_name": "demo_task",
-  "map_info": "ImmiRImmiR_ACC",
+  "cancer_type": "ACC",
+  "has_mRNA_direction": false,
   "rnas": {
     "miRNA": [
       "hsa-mir-567",
@@ -53,7 +54,6 @@
       "SYNM",
       "SMG7",
       "KDM8",
-      "HLA-DMA",
       "TNP2",
       "ST3GAL4",
       "ZNF544",
@@ -65,7 +65,25 @@
       "OSCP1",
       "PAFAH1B3",
       "GALNS",
-      "SPDYE14"
+      "SPDYE14",
+      "HLA-DRA",
+      "HLA-DPA1",
+      "HLA-DQB1",
+      "CD74",
+      "IFNG",
+      "HLA-DRB5",
+      "HLA-DPB1",
+      "HLA-DQA1",
+      "HLA-DMA",
+      "HLA-DRB1",
+      "KLRC1",
+      "HLA-DQA2",
+      "CTSS",
+      "KLRD1",
+      "HLA-DOA",
+      "CIITA",
+      "CD8B",
+      "KIR2DL4"
     ],
     "lncRNA": [
       "NONHSAG043011",

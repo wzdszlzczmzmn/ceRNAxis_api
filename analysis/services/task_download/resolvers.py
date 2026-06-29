@@ -3,9 +3,8 @@ from pathlib import Path
 import re
 
 from analysis.utils.custom_list_query_task_utils import (
-    get_task_output_dir,
-    get_task_out_prefix,
-    validate_task_name_for_filename as validate_custom_task_name,
+    validate_task_name_for_filename as validate_custom_task_name, get_immune_result_file_name,
+    get_immune_result_file_path,
 )
 from analysis.utils.paired_cohort_task_utils import (
     get_paired_cohort_task_output_dir,
@@ -67,13 +66,10 @@ def resolve_custom_list_query_result_files(task) -> list[DownloadableResultFile]
 
     validate_custom_task_name(task.task_name)
 
-    output_dir = get_task_output_dir(task)
-    out_prefix = get_task_out_prefix(task)
-
     archive_root = build_archive_root_dir(task)
 
-    result_filename = f"{out_prefix}.csv"
-    result_file_path = (output_dir / result_filename).resolve()
+    result_filename = get_immune_result_file_name(task)
+    result_file_path = get_immune_result_file_path(task)
 
     return [
         DownloadableResultFile(

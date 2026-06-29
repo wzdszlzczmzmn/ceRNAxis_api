@@ -3,6 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 
+from analysis.utils.custom_list_query_task_utils import validate_cancer_type
 
 CUSTOM_LIST_QUERY_DEMO_DIR_NAME = "custom_list_query"
 CUSTOM_LIST_QUERY_DEMO_INPUT_FILENAME = "custom_list_query_demo_input.json"
@@ -87,7 +88,7 @@ def validate_custom_list_query_demo_input(config: dict) -> None:
         )
 
     task_name = str(config.get("task_name", "")).strip()
-    map_info = str(config.get("map_info", "")).strip()
+    cancer_type = str(config.get("cancer_type", "")).strip()
     rnas = config.get("rnas")
 
     if not task_name:
@@ -95,9 +96,21 @@ def validate_custom_list_query_demo_input(config: dict) -> None:
             "Demo input is missing field: task_name."
         )
 
-    if not map_info:
+    try:
+        validate_cancer_type(cancer_type)
+    except ValueError as e:
+        raise CustomListQueryDemoConfigError(str(e)) from e
+
+    has_mrna_direction = config.get("has_mRNA_direction", False)
+
+    if not isinstance(has_mrna_direction, bool):
         raise CustomListQueryDemoConfigError(
-            "Demo input is missing field: map_info."
+            "Demo input field 'has_mRNA_direction' must be a boolean."
+        )
+
+    if has_mrna_direction is not False:
+        raise CustomListQueryDemoConfigError(
+            "Demo input field 'has_mRNA_direction' must currently be false."
         )
 
     if not isinstance(rnas, dict):

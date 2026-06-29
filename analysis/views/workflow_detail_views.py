@@ -13,9 +13,6 @@ from analysis.services.task_common.registry import TaskNotFoundError, MultipleTa
 from analysis.services.task_download.registry import TaskDownloadConfigNotFoundError
 from analysis.services.task_download.service import prepare_task_result_download, InvalidTaskUUIDError, \
     TaskNotReadyForDownloadError, TaskResultFileNotFoundError, TaskResultArchiveError, TaskDownloadError
-from analysis.utils.paired_cohort_task_utils import PairedCohortTaskPathError, PairedCohortTaskInputError, \
-    build_paired_cohort_survival_km_data, read_paired_cohort_mrna_gsea_file
-from analysis.models import PairedCohortTask
 
 
 class WorkflowTaskResultDownloadView(APIView):

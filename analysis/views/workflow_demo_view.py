@@ -13,7 +13,7 @@ from analysis.slurm_sbtch import sbatch_custom_list_query_task, sbatch_paired_co
 from analysis.utils.custom_list_query_demo_utils import load_custom_list_query_demo_input, CustomListQueryDemoPathError, \
     CustomListQueryDemoConfigError
 from analysis.utils.custom_list_query_task_utils import normalize_rnas, CustomListQueryTaskInputError, \
-    prepare_custom_list_query_workspace, CustomListQueryPathError, validate_task_name_for_filename
+    prepare_custom_list_query_workspace, CustomListQueryPathError, validate_task_name_for_filename, validate_cancer_type
 from analysis.utils.immune_annotation_path_utils import validate_immune_annotation_file, ImmuneAnnotationPathError
 from analysis.utils.paired_cohort_demo_utils import (
     PAIRED_COHORT_DEMO_VALID_RNA_TYPES,
@@ -77,8 +77,8 @@ class CustomListQueryDemoRunView(APIView):
                 demo_input.get("task_name", "")
             ).strip()
 
-            map_info = str(
-                demo_input.get("map_info", "")
+            cancer_type = str(
+                demo_input.get("cancer_type", "")
             ).strip()
 
             rnas = demo_input.get("rnas")
@@ -92,32 +92,15 @@ class CustomListQueryDemoRunView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            if not map_info:
-                return Response(
-                    {
-                        "success": False,
-                        "msg": "Demo input is missing field: map_info.",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
             try:
-                validate_immune_annotation_file(map_info)
-            except ImmuneAnnotationPathError as e:
+                cancer_type = validate_cancer_type(cancer_type)
+            except CustomListQueryTaskInputError as e:
                 return Response(
                     {
                         "success": False,
                         "msg": str(e),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
-                )
-            except FileNotFoundError as e:
-                return Response(
-                    {
-                        "success": False,
-                        "msg": str(e),
-                    },
-                    status=status.HTTP_404_NOT_FOUND,
                 )
 
             try:
@@ -132,10 +115,11 @@ class CustomListQueryDemoRunView(APIView):
                 )
 
             task = CustomListQueryTask.objects.create(
-                user=request.data.get("user", ""),
+                user=str(request.data.get("user", "")).strip(),
                 task_name=task_name,
                 status=CustomListQueryTask.Status.Pending,
-                map_info=map_info,
+                cancer_type=cancer_type,
+                has_mrna_direction=False,
                 rnas=normalized_rnas,
             )
 
@@ -179,13 +163,15 @@ class CustomListQueryDemoRunView(APIView):
                     "msg": "Demo task submitted successfully.",
                     "data": {
                         "uuid": str(task.uuid),
+                        "task_type": "CustomListQueryTask",
                         "task_name": task.task_name,
                         "user": task.user,
                         "status": task.get_status_display(),
                         "create_time": timezone.localtime(
                             task.create_time
                         ).strftime("%Y-%m-%d %H:%M:%S"),
-                        "map_info": task.map_info,
+                        "cancer_type": task.cancer_type,
+                        "has_mRNA_direction": task.has_mrna_direction,
                         "is_demo": True,
                         "rna_counts": {
                             "miRNA": task.miRNA_count,

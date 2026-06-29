@@ -1,7 +1,7 @@
 import subprocess
 
 from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
-from analysis.utils.custom_list_query_task_utils import get_task_output_dir, get_task_out_prefix
+from analysis.utils.custom_list_query_task_utils import get_task_output_dir
 from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_input_files, \
     get_hybrid_reference_task_output_dir, HYBRID_REFERENCE_VALID_TCGA_TYPES, HYBRID_REFERENCE_VALID_LNCRNA_TYPES, \
     HYBRID_REFERENCE_VALID_DEG_METHODS
@@ -75,7 +75,7 @@ def sbatch_custom_list_query_task(task_uuid) -> dict:
         stdout_file = get_pipeline_stdout_file_path(output_dir)
         stderr_file = get_pipeline_stderr_file_path(output_dir)
 
-        out_prefix = get_task_out_prefix(task)
+        out_prefix = task.task_name
 
         cancer_type = str(getattr(task, "cancer_type", "") or "").strip()
 
