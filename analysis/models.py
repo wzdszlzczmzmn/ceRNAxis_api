@@ -52,9 +52,34 @@ class CustomListQueryTask(models.Model):
         blank=True,
     )
 
+    # 兼容旧任务：旧版本用于保存 ImmiRImmiR_ACC 这类 immune annotation file value。
+    # 新 Module 1 不再依赖该字段。
     map_info = models.CharField(
         max_length=200,
-        help_text="Selected immune annotation file value, e.g. ImmiRImmiR_ACC.",
+        blank=True,
+        default="",
+        help_text=(
+            "Deprecated for CustomListQueryTask. "
+            "Previously selected immune annotation file value, e.g. ImmiRImmiR_ACC."
+        ),
+    )
+
+    # 新脚本 run_module1.sh 使用的 cancer_type，例如 ACC、BRCA、LUAD。
+    cancer_type = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Cancer type used by run_module1.sh, e.g. ACC.",
+    )
+
+    # 当前阶段固定为 False；预留给后续 directional mRNA 分支。
+    has_mrna_direction = models.BooleanField(
+        default=False,
+        help_text=(
+            "Whether mRNA input is directional. "
+            "Currently fixed to False for frontend submission."
+        ),
     )
 
     rnas = models.JSONField(
@@ -65,6 +90,11 @@ class CustomListQueryTask(models.Model):
     class Meta:
         db_table = "custom_list_query_task"
         ordering = ["-create_time"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["cancer_type"]),
+            models.Index(fields=["create_time"]),
+        ]
 
     def __str__(self):
         return f"{self.task_name} ({self.uuid})"

@@ -1,8 +1,7 @@
 import subprocess
 
 from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
-from analysis.utils.custom_list_query_task_utils import validate_task_mirna_axis_file, get_task_output_dir, \
-    get_task_out_prefix
+from analysis.utils.custom_list_query_task_utils import get_task_output_dir, get_task_out_prefix
 from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_input_files, \
     get_hybrid_reference_task_output_dir, HYBRID_REFERENCE_VALID_TCGA_TYPES, HYBRID_REFERENCE_VALID_LNCRNA_TYPES, \
     HYBRID_REFERENCE_VALID_DEG_METHODS
@@ -17,16 +16,42 @@ PAIRED_COHORT_SLURM_SCRIPT = "submit_paired_cohort_task.sh"
 HYBRID_REFERENCE_SLURM_SCRIPT = "submit_hybrid_reference_task.sh"
 
 
+def _join_rna_values(values) -> str:
+    """Convert a normalized RNA list to a comma-separated string."""
+
+    if not values:
+        return ""
+
+    if not isinstance(values, (list, tuple, set)):
+        return ""
+
+    cleaned_values = []
+
+    for value in values:
+        cleaned_value = str(value).strip()
+
+        if cleaned_value:
+            cleaned_values.append(cleaned_value)
+
+    return ",".join(cleaned_values)
+
+
 def sbatch_custom_list_query_task(task_uuid) -> dict:
     """
     Submit CustomListQueryTask to SLURM.
 
     Expected SLURM script arguments:
         1. uuid
-        2. map_info_csv
-        3. cerna_axis_csv
-        4. outdir
-        5. out_prefix
+        2. miRNA_str
+        3. mRNA_str
+        4. mRNA_str_up
+        5. mRNA_str_down
+        6. lncRNA_str
+        7. circRNA_str
+        8. outdir
+        9. out_prefix
+        10. cancer_type
+        11. has_mRNA_direction
     """
 
     try:
@@ -44,14 +69,6 @@ def sbatch_custom_list_query_task(task_uuid) -> dict:
             CUSTOM_LIST_QUERY_SLURM_SCRIPT
         )
 
-        map_info_file = validate_immune_annotation_file(
-            task.map_info
-        )
-
-        cerna_axis_file = validate_task_mirna_axis_file(
-            task
-        )
-
         output_dir = get_task_output_dir(task)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -59,6 +76,26 @@ def sbatch_custom_list_query_task(task_uuid) -> dict:
         stderr_file = get_pipeline_stderr_file_path(output_dir)
 
         out_prefix = get_task_out_prefix(task)
+
+        cancer_type = str(getattr(task, "cancer_type", "") or "").strip()
+
+        if not cancer_type:
+            raise ValueError("Missing cancer_type for custom list query task.")
+
+        rnas = task.rnas or {}
+
+        miRNA_str = _join_rna_values(rnas.get("miRNA"))
+        mRNA_str = _join_rna_values(rnas.get("mRNA"))
+        lncRNA_str = _join_rna_values(rnas.get("lncRNA"))
+        circRNA_str = _join_rna_values(rnas.get("circRNA"))
+
+        # 当前阶段固定走非 directional mRNA 分支。
+        mRNA_str_up = ""
+        mRNA_str_down = ""
+        has_mRNA_direction = "False"
+
+        # 如果以后开放 directional 分支，可以改成：
+        # has_mRNA_direction = "True" if task.has_mrna_direction else "False"
 
     except Exception as e:
         return {
@@ -75,10 +112,16 @@ def sbatch_custom_list_query_task(task_uuid) -> dict:
         f"--error={stderr_file}",
         str(script_path),
         str(task.uuid),
-        str(map_info_file),
-        str(cerna_axis_file),
+        miRNA_str,
+        mRNA_str,
+        mRNA_str_up,
+        mRNA_str_down,
+        lncRNA_str,
+        circRNA_str,
         str(output_dir),
         out_prefix,
+        cancer_type,
+        has_mRNA_direction,
     ]
 
     result = subprocess.run(

@@ -8,8 +8,8 @@ from rest_framework import status
 
 from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
 from analysis.slurm_sbtch import sbatch_custom_list_query_task, sbatch_paired_cohort_task, sbatch_hybrid_reference_task
-from analysis.utils.custom_list_query_task_utils import normalize_rnas, CustomListQueryTaskInputError, \
-    prepare_custom_list_query_workspace, CustomListQueryPathError
+from analysis.utils.custom_list_query_task_utils import CustomListQueryTaskInputError, \
+    prepare_custom_list_query_workspace, CustomListQueryPathError, validate_cancer_type, normalize_rnas
 from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_task_params, \
     HybridReferenceTaskInputError, HybridReferenceTaskPathError, HYBRID_REFERENCE_ALLOWED_FILE_FIELDS, \
     prepare_hybrid_reference_workspace, save_hybrid_reference_uploaded_input_files, \
@@ -29,7 +29,7 @@ class CustomListQueryTaskSubmitView(APIView):
     def post(self, request):
         try:
             task_name = str(request.data.get("task_name", "")).strip()
-            map_info = str(request.data.get("map_info", "")).strip()
+            cancer_type = str(request.data.get("cancer_type", "")).strip()
             rnas = request.data.get("rnas")
 
             if not task_name:
@@ -41,32 +41,15 @@ class CustomListQueryTaskSubmitView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            if not map_info:
-                return Response(
-                    {
-                        "success": False,
-                        "msg": "Missing field: map_info.",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
             try:
-                validate_immune_annotation_file(map_info)
-            except ImmuneAnnotationPathError as e:
+                cancer_type = validate_cancer_type(cancer_type)
+            except CustomListQueryTaskInputError as e:
                 return Response(
                     {
                         "success": False,
                         "msg": str(e),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
-                )
-            except FileNotFoundError as e:
-                return Response(
-                    {
-                        "success": False,
-                        "msg": str(e),
-                    },
-                    status=status.HTTP_404_NOT_FOUND,
                 )
 
             try:
@@ -84,13 +67,18 @@ class CustomListQueryTaskSubmitView(APIView):
                 user=request.data.get("user", ""),
                 task_name=task_name,
                 status=CustomListQueryTask.Status.Pending,
-                map_info=map_info,
+                cancer_type=cancer_type,
+                has_mrna_direction=False,
                 rnas=normalized_rnas,
             )
 
             try:
-                workspace = prepare_custom_list_query_workspace(task)
-            except (OSError, CustomListQueryTaskInputError, CustomListQueryPathError) as e:
+                prepare_custom_list_query_workspace(task)
+            except (
+                OSError,
+                CustomListQueryTaskInputError,
+                CustomListQueryPathError,
+            ) as e:
                 task.status = CustomListQueryTask.Status.Failed
                 task.finish_time = timezone.now()
                 task.save(update_fields=["status", "finish_time"])
@@ -130,7 +118,8 @@ class CustomListQueryTaskSubmitView(APIView):
                         "create_time": timezone.localtime(
                             task.create_time
                         ).strftime("%Y-%m-%d %H:%M:%S"),
-                        "map_info": task.map_info,
+                        "cancer_type": task.cancer_type,
+                        "has_mRNA_direction": task.has_mrna_direction,
                         "rna_counts": {
                             "miRNA": task.miRNA_count,
                             "mRNA": task.mRNA_count,

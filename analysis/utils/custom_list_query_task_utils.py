@@ -1,8 +1,11 @@
 import csv
 from pathlib import Path
+import re
 
 ALLOWED_RNA_TYPES = ["miRNA", "mRNA", "lncRNA", "circRNA"]
-MAX_TOTAL_RNA_COUNT = 100
+MAX_TOTAL_RNA_COUNT = 120
+
+CANCER_TYPE_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 IMMUNE_FILE_PREFIX = "ImmiRImmiR_"
 IMMUNE_FILE_SUFFIX = ".csv"
@@ -98,14 +101,6 @@ def get_mirna_axis_filename(task_name: str) -> str:
     return f"{task_name}{MIRNA_AXIS_FILE_SUFFIX}"
 
 
-def get_task_input_dir(task) -> Path:
-    return Path(task.get_input_dir_absolute_path()).resolve()
-
-
-def get_task_output_dir(task) -> Path:
-    return Path(task.get_output_dir_absolute_path()).resolve()
-
-
 def get_task_mirna_axis_file_path(task) -> Path:
     input_dir = get_task_input_dir(task)
 
@@ -130,26 +125,31 @@ def validate_task_mirna_axis_file(task) -> Path:
     return file_path
 
 
-def write_mirna_axis_file(task) -> Path:
-    mirnas = task.rnas.get("miRNA", [])
+def validate_cancer_type(cancer_type: str) -> str:
+    value = str(cancer_type or "").strip()
 
-    if not isinstance(mirnas, list):
-        raise CustomListQueryTaskInputError("miRNA input must be a list.")
+    if not value:
+        raise CustomListQueryTaskInputError("Missing field: cancer_type.")
 
-    input_dir = get_task_input_dir(task)
-    input_dir.mkdir(parents=True, exist_ok=True)
+    if len(value) > 50:
+        raise CustomListQueryTaskInputError(
+            "cancer_type must be no more than 50 characters."
+        )
 
-    file_path = get_task_mirna_axis_file_path(task)
+    if not CANCER_TYPE_PATTERN.fullmatch(value):
+        raise CustomListQueryTaskInputError(
+            "Invalid cancer_type. Only letters, numbers and underscores are allowed."
+        )
 
-    with file_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+    return value
 
-        writer.writerow(["miRNA", "", "", "", "", "", ""])
 
-        for mirna in mirnas:
-            writer.writerow([mirna, "", "", "", "", "", ""])
+def get_task_input_dir(task) -> Path:
+    return Path(task.get_input_dir_absolute_path()).resolve()
 
-    return file_path
+
+def get_task_output_dir(task) -> Path:
+    return Path(task.get_output_dir_absolute_path()).resolve()
 
 
 def prepare_custom_list_query_workspace(task) -> dict:
@@ -159,16 +159,18 @@ def prepare_custom_list_query_workspace(task) -> dict:
     input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    mirna_axis_file = write_mirna_axis_file(task)
-
     return {
         "input_dir": input_dir,
         "output_dir": output_dir,
-        "mirna_axis_file": mirna_axis_file,
     }
 
 
 def get_task_out_prefix(task) -> str:
     task_name = str(task.task_name).strip()
     validate_task_name_for_filename(task_name)
+
+    # 如果后续下载逻辑仍按旧 prefix 找文件，可以暂时保留旧命名。
     return f"{task_name}_map_immune_gene_axis"
+
+    # 如果你准备彻底切到新 run_module1.sh 的自然命名，也可以改成：
+    # return task_name

@@ -10,24 +10,35 @@ set -Eeuo pipefail
 # Usage:
 # sbatch submit_custom_list_query_task.sh \
 #   <uuid> \
-#   <map_info_csv> \
-#   <cerna_axis_csv> \
+#   <miRNA_str> \
+#   <mRNA_str> \
+#   <mRNA_str_up> \
+#   <mRNA_str_down> \
+#   <lncRNA_str> \
+#   <circRNA_str> \
 #   <outdir> \
-#   <out_prefix>
+#   <out_prefix> \
+#   <cancer_type> \
+#   <has_mRNA_direction>
 
-if [ $# -lt 5 ]; then
+if [ $# -lt 11 ]; then
     echo "Error: Missing arguments."
-    echo "Usage: sbatch $0 <uuid> <map_info_csv> <cerna_axis_csv> <outdir> <out_prefix>"
+    echo "Usage: sbatch $0 <uuid> <miRNA_str> <mRNA_str> <mRNA_str_up> <mRNA_str_down> <lncRNA_str> <circRNA_str> <outdir> <out_prefix> <cancer_type> <has_mRNA_direction>"
     exit 1
 fi
 
 uuid="$1"
-map_info_csv="$2"
-cerna_axis_csv="$3"
-outdir="$4"
-out_prefix="$5"
+miRNA_str="$2"
+mRNA_str="$3"
+mRNA_str_up="$4"
+mRNA_str_down="$5"
+lncRNA_str="$6"
+circRNA_str="$7"
+outdir="$8"
+out_prefix="$9"
+cancer_type="${10}"
+has_mRNA_direction="${11}"
 
-# 根据实际部署路径修改
 script_wdr="/home/platform/workspace/ceRNAixDB"
 
 status_file="${outdir}/status.txt"
@@ -48,10 +59,16 @@ echo "========================================"
 echo "Starting custom list query task"
 echo "Start time: $(date +"%Y-%m-%d %H:%M:%S")"
 echo "UUID: ${uuid}"
-echo "map_info_csv: ${map_info_csv}"
-echo "cerna_axis_csv: ${cerna_axis_csv}"
+echo "miRNA count string length: ${#miRNA_str}"
+echo "mRNA count string length: ${#mRNA_str}"
+echo "mRNA_str_up length: ${#mRNA_str_up}"
+echo "mRNA_str_down length: ${#mRNA_str_down}"
+echo "lncRNA count string length: ${#lncRNA_str}"
+echo "circRNA count string length: ${#circRNA_str}"
 echo "outdir: ${outdir}"
 echo "out_prefix: ${out_prefix}"
+echo "cancer_type: ${cancer_type}"
+echo "has_mRNA_direction: ${has_mRNA_direction}"
 echo "script_wdr: ${script_wdr}"
 echo "========================================"
 
@@ -61,31 +78,49 @@ if [ ! -d "${script_wdr}" ]; then
     exit 1
 fi
 
-if [ ! -f "${script_wdr}/run/run_map_immune_gene_axis.sh" ]; then
-    echo "Error: target script does not exist: ${script_wdr}/run/run_map_immune_gene_axis.sh"
+if [ ! -f "${script_wdr}/run/run_module1.sh" ]; then
+    echo "Error: target script does not exist: ${script_wdr}/run/run_module1.sh"
     write_status "fail"
     exit 1
 fi
 
-if [ ! -f "${map_info_csv}" ]; then
-    echo "Error: map_info_csv does not exist: ${map_info_csv}"
+if [ -z "${outdir}" ]; then
+    echo "Error: outdir is empty."
     write_status "fail"
     exit 1
 fi
 
-if [ ! -f "${cerna_axis_csv}" ]; then
-    echo "Error: cerna_axis_csv does not exist: ${cerna_axis_csv}"
+if [ -z "${out_prefix}" ]; then
+    echo "Error: out_prefix is empty."
     write_status "fail"
     exit 1
 fi
 
-echo "Running run_map_immune_gene_axis.sh..."
+if [ -z "${cancer_type}" ]; then
+    echo "Error: cancer_type is empty."
+    write_status "fail"
+    exit 1
+fi
 
-bash "${script_wdr}/run/run_map_immune_gene_axis.sh" \
-    "${map_info_csv}" \
-    "${cerna_axis_csv}" \
+if [ "${has_mRNA_direction}" != "True" ] && [ "${has_mRNA_direction}" != "False" ]; then
+    echo "Error: has_mRNA_direction must be True or False."
+    write_status "fail"
+    exit 1
+fi
+
+echo "Running run_module1.sh..."
+
+bash "${script_wdr}/run/run_module1.sh" \
+    "${miRNA_str}" \
+    "${mRNA_str}" \
+    "${mRNA_str_up}" \
+    "${mRNA_str_down}" \
+    "${lncRNA_str}" \
+    "${circRNA_str}" \
     "${outdir}" \
-    "${out_prefix}"
+    "${out_prefix}" \
+    "${cancer_type}" \
+    "${has_mRNA_direction}"
 
 script_exit_code=$?
 
