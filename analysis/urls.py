@@ -25,7 +25,6 @@ urlpatterns = [
     path('hybrid_reference_task_network/', workflow_network_views.HybridReferenceTaskNetworkView.as_view(),
          name='hybrid_reference_task_network'),
 
-
     path('paired_cohort_task_submit/', workflow_submit_views.PairedCohortTaskSubmitView.as_view(),
          name='paired_cohort_task_submit'),
 
@@ -65,22 +64,42 @@ urlpatterns = [
          workflow_exp_correlation_views.HybridReferenceExpCorrelationPlotDataView.as_view(),
          name='hybrid_reference_exp_correlation_plot_data'),
 
-    path('workflow_task_result_download/', workflow_detail_views.WorkflowTaskResultDownloadView.as_view(),
-         name='workflow_task_result_download'),
+    # Task Demo
     path('paired_cohort_demo_info/', workflow_demo_view.PairedCohortDemoInfoView.as_view(),
          name='paired_cohort_demo_info'),
     path('paired_cohort_demo_sample_meta/', workflow_demo_view.PairedCohortDemoSampleMetaView.as_view(),
          name='paired_cohort_demo_sample_meta'),
-    path('paired_cohort_demo_expression_gene_list/', workflow_demo_view.PairedCohortDemoExpressionGeneListView.as_view(),
+    path('paired_cohort_demo_expression_gene_list/',
+         workflow_demo_view.PairedCohortDemoExpressionGeneListView.as_view(),
          name='paired_cohort_demo_expression_gene_list'),
     path('paired_cohort_demo_expression_data/', workflow_demo_view.PairedCohortDemoExpressionDataView.as_view(),
          name='paired_cohort_demo_expression_data'),
+    path('hybrid_reference_demo_info/', workflow_demo_view.HybridReferenceDemoInfoView.as_view(),
+         name='hybrid_reference_demo_info'),
+    path('hybrid_reference_demo_sample_meta/', workflow_demo_view.HybridReferenceDemoSampleMetaView.as_view(),
+         name='hybrid_reference_demo_sample_meta'),
+    path('hybrid_reference_demo_expression_gene_list/',
+         workflow_demo_view.HybridReferenceDemoExpressionGeneListView.as_view(),
+         name='hybrid_reference_demo_expression_gene_list'),
+    path('hybrid_reference_demo_expression_data/', workflow_demo_view.HybridReferenceDemoExpressionDataView.as_view(),
+         name='hybrid_reference_demo_expression_data'),
+
+    # Demo Input Download Views
     path('paired_cohort_demo_download_data/', workflow_demo_view.PairedCohortDemoDataDownloadView.as_view(),
          name='paired_cohort_demo_download_data'),
+    path('hybrid_reference_demo_files_download/', workflow_demo_view.HybridReferenceDemoDataDownloadView.as_view(),
+         name='hybrid_reference_demo_files_download'),
+
+    path('workflow_task_result_download/', workflow_detail_views.WorkflowTaskResultDownloadView.as_view(),
+         name='workflow_task_result_download'),
+
+    # Run Demo Views
     path('custom_list_query_run_demo/', workflow_demo_view.CustomListQueryDemoRunView.as_view(),
          name='custom_list_query_run_demo'),
     path('paired_cohort_run_demo/', workflow_demo_view.PairedCohortDemoRunView.as_view(),
          name='paired_cohort_run_demo'),
+    path("hybrid_reference_run_demo/", workflow_demo_view.HybridReferenceDemoRunView.as_view(),
+         name="hybrid_reference_demo_run"),
 
     # Axis Final Views
     path('paired_cohort_axis_final/', workflow_axis_final_views.PairedCohortAxisFinalDataView.as_view(),

@@ -1,0 +1,11 @@
+{
+  "task_type": "HybridReferenceTask",
+  "description": "Example input files for hybrid reference analysis.",
+  "csv_files": {
+    "mrna_file": "mrna.csv",
+    "meta_file": "meta.csv"
+  },
+  "parquet_files": {
+    "mrna_file": "mrna.parquet"
+  }
+}

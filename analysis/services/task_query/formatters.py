@@ -45,19 +45,41 @@ def normalize_task_rnas_for_response(task) -> dict:
 
 
 def format_custom_list_query_task(task, position=0) -> dict:
+    rnas = normalize_task_rnas_for_response(task)
+
     return {
         "uuid": str(task.uuid),
         "status": task.status,
         "position": position,
+
         "task_name": task.task_name,
-        "map_info": task.map_info,
+        "user": getattr(task, "user", ""),
+
+        # Deprecated for CustomListQueryTask, retained for backward compatibility.
+        "map_info": getattr(task, "map_info", ""),
+
+        # New Module 1 fields.
+        "cancer_type": getattr(task, "cancer_type", ""),
+        "has_mrna_direction": getattr(task, "has_mrna_direction", False),
+
         "create_time": format_datetime(task.create_time),
         "finish_time": format_datetime(task.finish_time),
+
         "miRNA_count": task.miRNA_count,
         "mRNA_count": task.mRNA_count,
         "lncRNA_count": task.lncRNA_count,
         "circRNA_count": task.circRNA_count,
-        "rnas": normalize_task_rnas_for_response(task),
+        "total_rna_count": task.total_rna_count,
+
+        "rna_counts": {
+            "miRNA": task.miRNA_count,
+            "mRNA": task.mRNA_count,
+            "lncRNA": task.lncRNA_count,
+            "circRNA": task.circRNA_count,
+            "total": task.total_rna_count,
+        },
+
+        "rnas": rnas,
     }
 
 

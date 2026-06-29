@@ -8,12 +8,21 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 
-from analysis.models import CustomListQueryTask, PairedCohortTask
-from analysis.slurm_sbtch import sbatch_custom_list_query_task, sbatch_paired_cohort_task
+from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
+from analysis.slurm_sbtch import sbatch_custom_list_query_task, sbatch_paired_cohort_task, sbatch_hybrid_reference_task
 from analysis.utils.custom_list_query_demo_utils import load_custom_list_query_demo_input, CustomListQueryDemoPathError, \
     CustomListQueryDemoConfigError
 from analysis.utils.custom_list_query_task_utils import normalize_rnas, CustomListQueryTaskInputError, \
     prepare_custom_list_query_workspace, CustomListQueryPathError, validate_task_name_for_filename, validate_cancer_type
+from analysis.utils.hybrid_reference_demo_utils import load_hybrid_reference_demo_input, HybridReferenceDemoPathError, \
+    HybridReferenceDemoManifestError, HybridReferenceDemoConfigError, get_hybrid_reference_demo_cutoff_fields, \
+    copy_hybrid_reference_demo_input_files_to_task, HYBRID_REFERENCE_DEMO_VALID_RNA_TYPES, \
+    load_hybrid_reference_demo_manifest, get_hybrid_reference_demo_dir, get_hybrid_reference_demo_meta_file_path, \
+    HybridReferenceDemoError, get_hybrid_reference_demo_expression_file_path, \
+    validate_hybrid_reference_demo_data_archive, HYBRID_REFERENCE_DEMO_DATA_ARCHIVE_NAME
+from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_task_params, \
+    HybridReferenceTaskInputError, HybridReferenceTaskPathError, prepare_hybrid_reference_workspace, \
+    validate_hybrid_reference_file_contents
 from analysis.utils.immune_annotation_path_utils import validate_immune_annotation_file, ImmuneAnnotationPathError
 from analysis.utils.paired_cohort_demo_utils import (
     PAIRED_COHORT_DEMO_VALID_RNA_TYPES,
@@ -34,6 +43,8 @@ from analysis.utils.paired_cohort_task_utils import PairedCohortTaskPathError, p
 
 PAIRED_COHORT_DEMO_MAX_SELECTED_GENES = 30
 DEFAULT_DEMO_EXPRESSION_FILE_FORMAT = "parquet"
+
+HYBRID_REFERENCE_DEMO_MAX_SELECTED_GENES = 30
 
 
 class CustomListQueryDemoRunView(APIView):
@@ -484,6 +495,275 @@ class PairedCohortDemoRunView(APIView):
             )
 
 
+class HybridReferenceDemoRunView(APIView):
+    """
+    Run HybridReferenceTask demo.
+
+    This endpoint reads fixed demo input from:
+        DEMO_INPUT_DATA_HOME/hybrid_reference/hybrid_reference_demo_input.json
+
+    It creates a new HybridReferenceTask, copies demo CSV files into
+    task workspace/input, validates input files, and submits the task to Slurm.
+
+    Optional request body:
+        {
+            "user": "demo_user"
+        }
+    """
+
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        try:
+            try:
+                demo_input = load_hybrid_reference_demo_input()
+
+            except FileNotFoundError as e:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            except (
+                HybridReferenceDemoPathError,
+                HybridReferenceDemoManifestError,
+                HybridReferenceDemoConfigError,
+            ) as e:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            task_name = str(
+                demo_input.get("task_name", "")
+            ).strip()
+
+            tcga_type = str(
+                demo_input.get("tcga_type", "")
+            ).strip()
+
+            lncrna_type = str(
+                demo_input.get("lncrna_type", "")
+            ).strip()
+
+            use_padj = bool(
+                demo_input.get("use_padj", True)
+            )
+
+            map_info = str(
+                demo_input.get("map_info", "")
+            ).strip()
+
+            deg_method = str(
+                demo_input.get("deg_method", "")
+            ).strip()
+
+            if not task_name:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": "Demo input is missing field: task_name.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not map_info:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": "Demo input is missing field: map_info.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                validate_immune_annotation_file(map_info)
+            except ImmuneAnnotationPathError as e:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except FileNotFoundError as e:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            try:
+                validate_hybrid_reference_task_params(
+                    task_name=task_name,
+                    tcga_type=tcga_type,
+                    lncrna_type=lncrna_type,
+                    deg_method=deg_method,
+                    use_padj=use_padj,
+                )
+            except (
+                HybridReferenceTaskInputError,
+                HybridReferenceTaskPathError,
+            ) as e:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                cutoff_fields = get_hybrid_reference_demo_cutoff_fields(
+                    demo_input
+                )
+            except HybridReferenceDemoConfigError as e:
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            task = HybridReferenceTask.objects.create(
+                user=str(
+                    request.data.get("user", "")
+                ).strip(),
+                task_name=task_name,
+                status=HybridReferenceTask.Status.Pending,
+                tcga_type=tcga_type,
+                lncrna_type=lncrna_type,
+                use_padj=use_padj,
+                map_info=map_info,
+                deg_method=deg_method,
+                **cutoff_fields,
+            )
+
+            try:
+                prepare_hybrid_reference_workspace(task)
+
+                saved_files = copy_hybrid_reference_demo_input_files_to_task(
+                    task=task,
+                    config=demo_input,
+                )
+
+                validate_hybrid_reference_file_contents(task)
+
+                task.mrna_file = saved_files["mrna_file"]
+                task.meta_file = saved_files["meta_file"]
+
+                task.save(
+                    update_fields=[
+                        "mrna_file",
+                        "meta_file",
+                    ]
+                )
+
+            except HybridReferenceTaskInputError as e:
+                task.status = HybridReferenceTask.Status.Failed
+                task.finish_time = timezone.now()
+                task.save(update_fields=["status", "finish_time"])
+
+                return Response(
+                    {
+                        "success": False,
+                        "msg": str(e),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            except (
+                OSError,
+                FileNotFoundError,
+                HybridReferenceTaskPathError,
+                HybridReferenceDemoPathError,
+                HybridReferenceDemoConfigError,
+            ) as e:
+                task.status = HybridReferenceTask.Status.Failed
+                task.finish_time = timezone.now()
+                task.save(update_fields=["status", "finish_time"])
+
+                return Response(
+                    {
+                        "success": False,
+                        "msg": (
+                            "Failed to prepare demo task workspace: "
+                            f"{str(e)}"
+                        ),
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            submit_result = sbatch_hybrid_reference_task(task.uuid)
+
+            if not submit_result["success"]:
+                task.status = HybridReferenceTask.Status.Failed
+                task.finish_time = timezone.now()
+                task.save(update_fields=["status", "finish_time"])
+
+                return Response(
+                    {
+                        "success": False,
+                        "msg": submit_result["msg"],
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            return Response(
+                {
+                    "success": True,
+                    "msg": "Demo task submitted successfully.",
+                    "data": {
+                        "uuid": str(task.uuid),
+                        "task_type": "HybridReferenceTask",
+                        "task_name": task.task_name,
+                        "user": task.user,
+                        "status": task.get_status_display(),
+                        "create_time": timezone.localtime(
+                            task.create_time
+                        ).strftime("%Y-%m-%d %H:%M:%S"),
+                        "tcga_type": task.tcga_type,
+                        "lncrna_type": task.lncrna_type,
+                        "use_padj": task.use_padj,
+                        "map_info": task.map_info,
+                        "deg_method": task.deg_method,
+                        "is_demo": True,
+                        "files": {
+                            "mrna_file": task.mrna_file,
+                            "meta_file": task.meta_file,
+                        },
+                        "cutoffs": {
+                            "mRNA": {
+                                "logfc_cutoff": task.logfc_cutoff_mrna,
+                                "padj_cutoff": task.padj_cutoff_mrna,
+                            },
+                        },
+                    },
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {
+                    "success": False,
+                    "msg": f"Server error: {str(e)}",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class PairedCohortDemoInfoView(APIView):
     """
     Return paired cohort demo manifest and file availability.
@@ -550,6 +830,72 @@ class PairedCohortDemoInfoView(APIView):
             )
 
 
+class HybridReferenceDemoInfoView(APIView):
+    """
+    Return hybrid reference demo manifest and file availability.
+    """
+
+    def get(self, request):
+        try:
+            manifest = load_hybrid_reference_demo_manifest()
+            demo_dir = get_hybrid_reference_demo_dir()
+
+            csv_files = manifest.get("csv_files", {})
+            parquet_files = manifest.get("parquet_files", {})
+
+            file_status = {
+                "csv_files": {},
+                "parquet_files": {},
+            }
+
+            for key, filename in csv_files.items():
+                file_path = demo_dir / filename
+                file_status["csv_files"][key] = {
+                    "filename": filename,
+                    "exists": file_path.exists() and file_path.is_file(),
+                }
+
+            for key, filename in parquet_files.items():
+                file_path = demo_dir / filename
+                file_status["parquet_files"][key] = {
+                    "filename": filename,
+                    "exists": file_path.exists() and file_path.is_file(),
+                }
+
+            return Response(
+                {
+                    "workflow_type": "hybrid_reference",
+                    "task_type": manifest.get("task_type"),
+                    "description": manifest.get("description", ""),
+                    "valid_rna_types": HYBRID_REFERENCE_DEMO_VALID_RNA_TYPES,
+                    "csv_files": csv_files,
+                    "parquet_files": parquet_files,
+                    "file_status": file_status,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except FileNotFoundError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except (
+            HybridReferenceDemoPathError,
+            HybridReferenceDemoManifestError,
+        ) as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            print(traceback.format_exc())
+            return Response(
+                {"detail": f"Failed to read hybrid reference demo info: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class PairedCohortDemoSampleMetaView(APIView):
     """
     Return paired cohort demo sample metadata.
@@ -590,6 +936,55 @@ class PairedCohortDemoSampleMetaView(APIView):
         return Response(
             {
                 "workflow_type": "paired_cohort",
+                "file_format": "csv",
+                "count": len(df),
+                "columns": df.columns.tolist(),
+                "results": df.to_dict("records"),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class HybridReferenceDemoSampleMetaView(APIView):
+    """
+    Return hybrid reference demo sample metadata.
+    """
+
+    def get(self, request):
+        try:
+            file_path = get_hybrid_reference_demo_meta_file_path()
+            validate_demo_file_exists(
+                file_path=file_path,
+                file_label="Hybrid reference demo sample metadata file",
+            )
+
+        except FileNotFoundError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except (
+            HybridReferenceDemoPathError,
+            HybridReferenceDemoManifestError,
+        ) as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            df = pd.read_csv(file_path, low_memory=False, encoding="utf-8-sig")
+        except Exception as e:
+            return Response(
+                {"detail": f"Failed to read demo sample metadata file: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        df = df.fillna("")
+
+        return Response(
+            {
+                "workflow_type": "hybrid_reference",
                 "file_format": "csv",
                 "count": len(df),
                 "columns": df.columns.tolist(),
@@ -671,6 +1066,88 @@ class PairedCohortDemoExpressionGeneListView(APIView):
         return Response(
             {
                 "workflow_type": "paired_cohort",
+                "rna_type": rna_type,
+                "file_format": DEFAULT_DEMO_EXPRESSION_FILE_FORMAT,
+                "sample_column": sample_column,
+                "count": len(genes),
+                "genes": genes,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class HybridReferenceDemoExpressionGeneListView(APIView):
+    """
+    Return gene list from hybrid reference demo expression parquet.
+    """
+
+    def get(self, request):
+        rna_type = str(
+            request.query_params.get("rna_type", "")
+        ).strip()
+
+        if not rna_type:
+            return Response(
+                {"detail": "Missing query parameter: rna_type."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if rna_type not in HYBRID_REFERENCE_DEMO_VALID_RNA_TYPES:
+            return Response(
+                {
+                    "detail": (
+                        "Invalid rna_type. Allowed values are: "
+                        f"{', '.join(HYBRID_REFERENCE_DEMO_VALID_RNA_TYPES)}."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            file_path = get_hybrid_reference_demo_expression_file_path(
+                rna_type=rna_type,
+            )
+
+            validate_demo_file_exists(
+                file_path=file_path,
+                file_label=f"Hybrid reference demo {rna_type} expression file",
+            )
+
+            columns = read_parquet_columns(file_path)
+
+        except FileNotFoundError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except (
+            HybridReferenceDemoError,
+            HybridReferenceDemoPathError,
+            HybridReferenceDemoManifestError,
+        ) as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            print(traceback.format_exc())
+            return Response(
+                {"detail": f"Failed to read demo expression schema: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if not columns:
+            return Response(
+                {"detail": "Demo expression file has no columns."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        sample_column = columns[0]
+        genes = columns[1:]
+
+        return Response(
+            {
+                "workflow_type": "hybrid_reference",
                 "rna_type": rna_type,
                 "file_format": DEFAULT_DEMO_EXPRESSION_FILE_FORMAT,
                 "sample_column": sample_column,
@@ -831,6 +1308,156 @@ class PairedCohortDemoExpressionDataView(APIView):
         )
 
 
+class HybridReferenceDemoExpressionDataView(APIView):
+    """
+    Return selected gene expression data from hybrid reference demo expression parquet.
+
+    Body:
+        {
+            "rna_type": "mRNA",
+            "genes": ["GENE1", "GENE2"]
+        }
+    """
+
+    def post(self, request):
+        rna_type = str(
+            request.data.get("rna_type", "")
+        ).strip()
+
+        genes = request.data.get("genes", [])
+
+        if not rna_type:
+            return Response(
+                {"detail": "Missing field: rna_type."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if rna_type not in HYBRID_REFERENCE_DEMO_VALID_RNA_TYPES:
+            return Response(
+                {
+                    "detail": (
+                        "Invalid rna_type. Allowed values are: "
+                        f"{', '.join(HYBRID_REFERENCE_DEMO_VALID_RNA_TYPES)}."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not isinstance(genes, list):
+            return Response(
+                {"detail": "Field 'genes' must be a list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        genes = [
+            str(gene).strip()
+            for gene in genes
+            if str(gene).strip()
+        ]
+
+        if not genes:
+            return Response(
+                {"detail": "At least one gene must be selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(genes) > HYBRID_REFERENCE_DEMO_MAX_SELECTED_GENES:
+            return Response(
+                {
+                    "detail": (
+                        "At most "
+                        f"{HYBRID_REFERENCE_DEMO_MAX_SELECTED_GENES} "
+                        "genes can be selected."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            file_path = get_hybrid_reference_demo_expression_file_path(
+                rna_type=rna_type,
+            )
+
+            validate_demo_file_exists(
+                file_path=file_path,
+                file_label=f"Hybrid reference demo {rna_type} expression file",
+            )
+
+            all_columns = read_parquet_columns(file_path)
+
+        except FileNotFoundError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except (
+            HybridReferenceDemoError,
+            HybridReferenceDemoPathError,
+            HybridReferenceDemoManifestError,
+        ) as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            print(traceback.format_exc())
+            return Response(
+                {"detail": f"Failed to read demo expression schema: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if not all_columns:
+            return Response(
+                {"detail": "Demo expression file has no columns."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        sample_column = all_columns[0]
+        available_genes = set(all_columns[1:])
+
+        missing_genes = [
+            gene for gene in genes
+            if gene not in available_genes
+        ]
+
+        if missing_genes:
+            return Response(
+                {
+                    "detail": "Some genes are not found in the demo expression file.",
+                    "missing_genes": missing_genes,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        usecols = [sample_column] + genes
+
+        try:
+            df = pd.read_parquet(
+                file_path,
+                columns=usecols,
+                engine="pyarrow",
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Failed to read demo expression data: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        df = df.fillna("")
+
+        return Response(
+            {
+                "workflow_type": "hybrid_reference",
+                "rna_type": rna_type,
+                "file_format": DEFAULT_DEMO_EXPRESSION_FILE_FORMAT,
+                "count": len(df),
+                "columns": df.columns.tolist(),
+                "results": df.to_dict("records"),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class PairedCohortDemoDataDownloadView(APIView):
     """
     Download paired cohort demo input data zip.
@@ -879,6 +1506,61 @@ class PairedCohortDemoDataDownloadView(APIView):
                     "success": False,
                     "detail": (
                         "Failed to download paired cohort demo data archive: "
+                        f"{str(e)}"
+                    ),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class HybridReferenceDemoDataDownloadView(APIView):
+    """
+    Download hybrid reference demo input data zip.
+
+    The zip file must already exist under hybrid reference demo input directory:
+
+        hybrid_reference_demo_data.zip
+
+    GET /api/analysis/hybrid_reference_demo/download_data/
+    """
+
+    def get(self, request):
+        try:
+            archive_path = validate_hybrid_reference_demo_data_archive()
+
+            return FileResponse(
+                open(archive_path, "rb"),
+                as_attachment=True,
+                filename=HYBRID_REFERENCE_DEMO_DATA_ARCHIVE_NAME,
+                content_type="application/zip",
+            )
+
+        except FileNotFoundError as e:
+            return Response(
+                {
+                    "success": False,
+                    "detail": str(e),
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        except HybridReferenceDemoPathError as e:
+            return Response(
+                {
+                    "success": False,
+                    "detail": str(e),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {
+                    "success": False,
+                    "detail": (
+                        "Failed to download hybrid reference demo data archive: "
                         f"{str(e)}"
                     ),
                 },

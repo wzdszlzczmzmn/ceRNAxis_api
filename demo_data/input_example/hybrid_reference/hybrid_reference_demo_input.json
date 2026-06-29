@@ -1,0 +1,19 @@
+{
+  "task_type": "HybridReferenceTask",
+  "task_name": "demo_task",
+  "tcga_type": "TCGA_ACC",
+  "lncrna_type": "log2tpm",
+  "use_padj": false,
+  "map_info": "ImmiRImmiR_ACC",
+  "deg_method": "limma",
+  "files": {
+    "mrna_file": "mrna.csv",
+    "meta_file": "meta.csv"
+  },
+  "cutoffs": {
+    "mRNA": {
+      "logfc_cutoff": 0.000001,
+      "padj_cutoff": 0.3
+    }
+  }
+}
