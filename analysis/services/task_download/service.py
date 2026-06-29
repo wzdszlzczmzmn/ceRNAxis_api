@@ -149,12 +149,29 @@ def validate_downloadable_result_files(
                 f"{file_path.name}"
             )
 
+        validate_archive_name(result_file.arcname)
+
+        if result_file.is_directory:
+            if file_path.exists() and not file_path.is_dir():
+                raise TaskResultArchiveError(
+                    f"Expected directory but found file: {file_path.name}"
+                )
+
+            if file_path.exists() and file_path.is_symlink():
+                raise TaskResultArchiveError(
+                    "Symbolic link is not allowed in result download: "
+                    f"{file_path.name}"
+                )
+
+            # Directory entries are allowed even when the directory does not exist,
+            # because some workflows need an empty folder in the final zip.
+            downloadable_files.append(result_file)
+            continue
+
         if not file_path.exists() or not file_path.is_file():
             if result_file.required:
                 missing_required_files.append(file_path.name)
             continue
-
-        validate_archive_name(result_file.arcname)
 
         downloadable_files.append(result_file)
 
@@ -220,6 +237,68 @@ def create_cached_result_archive(
         ) as zip_file:
             for result_file in downloadable_files:
                 file_path = Path(result_file.path).resolve()
+
+                if result_file.is_directory:
+                    directory_arcname = str(result_file.arcname).rstrip("/") + "/"
+
+                    validate_archive_name(directory_arcname)
+
+                    # Always create the directory entry, even if it is empty
+                    # or the physical directory does not exist.
+                    zip_file.writestr(directory_arcname, "")
+
+                    if not file_path.exists():
+                        continue
+
+                    if not file_path.is_dir():
+                        continue
+
+                    for child_path in file_path.rglob("*"):
+                        if child_path.is_symlink():
+                            raise TaskResultArchiveError(
+                                "Symbolic link is not allowed in result download: "
+                                f"{child_path.name}"
+                            )
+
+                        child_path = child_path.resolve()
+
+                        if child_path.is_symlink():
+                            raise TaskResultArchiveError(
+                                "Symbolic link is not allowed in result download: "
+                                f"{child_path.name}"
+                            )
+
+                        if not is_path_under_dir(child_path, file_path):
+                            raise TaskResultArchiveError(
+                                f"Invalid directory child path: {child_path.name}"
+                            )
+
+                        if child_path.is_dir():
+                            child_relative_path = child_path.relative_to(file_path)
+                            child_arcname = (
+                                f"{directory_arcname}"
+                                f"{child_relative_path.as_posix().rstrip('/')}/"
+                            )
+
+                            validate_archive_name(child_arcname)
+                            zip_file.writestr(child_arcname, "")
+                            continue
+
+                        if child_path.is_file():
+                            child_relative_path = child_path.relative_to(file_path)
+                            child_arcname = (
+                                f"{directory_arcname}"
+                                f"{child_relative_path.as_posix()}"
+                            )
+
+                            validate_archive_name(child_arcname)
+
+                            zip_file.write(
+                                filename=child_path,
+                                arcname=child_arcname,
+                            )
+
+                    continue
 
                 if file_path == archive_path:
                     continue
