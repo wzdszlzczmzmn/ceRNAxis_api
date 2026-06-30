@@ -153,3 +153,4 @@ TISCH2_DATASET_BASE_DIR = get_required_directory("TISCH2_DATASET_BASE_DIR")
 SCTML_DATASET_BASE_DIR = get_required_directory("SCTML_DATASET_BASE_DIR")
 IMMUNE_ANNOTATION_BASE_DIR = get_required_directory("IMMUNE_ANNOTATION_BASE_DIR")
 DEMO_INPUT_DATA_HOME = os.path.join(BASE_DIR, 'demo_data', 'input_example')
+DATASET_DOWNLOAD_ZIP_DIR = Path(BASE_DIR) / "zip_files" / "dataset"

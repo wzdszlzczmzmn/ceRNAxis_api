@@ -17,6 +17,17 @@ urlpatterns = [
     path('dataset_metadata/<str:dataset>/', dataset_views.DatasetMetadataDetailView.as_view(),
          name='dataset-metadata-detail'),
 
+    # Dataset File Download Views
+    path('dataset_data_download/', dataset_views.DatasetDownloadView.as_view(),
+         name='dataset-data-download'),
+    path('tcga_annotation_download/', dataset_views.DatasetAnnotationDownloadView.as_view(),
+         name='dataset-annotation-data-download'),
+    path(
+        "timedb_annotation_download/",
+        dataset_views.TIMEDBAnnotationDownloadView.as_view(),
+        name="timedb-annotation-download",
+    ),
+
     # Sample Meta Views
     path('dataset_metadata/<str:dataset>/sample_meta/', dataset_views.DatasetSampleMetaView.as_view(),
          name='dataset-sample-meta'),
@@ -45,6 +56,7 @@ urlpatterns = [
         name="tisch2-deg-cluster-plot",
     ),
 
+    # Aliquot Files Download Views
     path('aliquot_expression_download_files/', dataset_views.DatasetAliquotExpressionFileListView.as_view(),
          name='aliquot-expression-download-files'),
     path('aliquot_expression_file_download/', dataset_views.DatasetAliquotExpressionFileDownloadView.as_view(),
