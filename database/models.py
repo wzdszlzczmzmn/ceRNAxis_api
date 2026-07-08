@@ -228,3 +228,368 @@ class DatasetMetadata(models.Model):
 
     def __str__(self):
         return self.dataset
+
+
+class DatasetAxisFinalProject(models.Model):
+    class Source(models.TextChoices):
+        TCGA = "TCGA", "TCGA"
+        TIMEDB = "TIMEDB", "TIMEDB"
+
+    class Module(models.TextChoices):
+        MODULE2 = "module2", "Module 2"
+        MODULE3 = "module3", "Module 3"
+
+    class GroupType(models.TextChoices):
+        NONE = "none", "None"
+        COMMON = "common", "Common"
+        GRADE = "grade", "Grade"
+        STAGE = "stage", "Stage"
+
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        db_index=True,
+    )
+
+    module = models.CharField(
+        max_length=20,
+        choices=Module.choices,
+        db_index=True,
+    )
+
+    dataset_name = models.CharField(
+        max_length=128,
+        db_index=True,
+    )
+
+    group_type = models.CharField(
+        max_length=20,
+        choices=GroupType.choices,
+        default=GroupType.NONE,
+        db_index=True,
+    )
+
+    group_by = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    annotation_dir_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    annotation_file_prefix = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    axis_final_file_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    axis_final_file_path = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    file_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    row_count = models.PositiveIntegerField(default=0)
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    imported_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "dataset_axis_final_project"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "source",
+                    "module",
+                    "dataset_name",
+                    "group_type",
+                    "group_by",
+                ],
+                name="uniq_dataset_axis_project",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["source", "module", "dataset_name"],
+                name="idx_dataset_axis_project_base",
+            ),
+            models.Index(
+                fields=["dataset_name", "group_type"],
+                name="idx_dataset_axis_project_group",
+            ),
+        ]
+
+    def __str__(self):
+        if self.group_type != self.GroupType.NONE:
+            return (
+                f"{self.source}:{self.module}:"
+                f"{self.dataset_name}:{self.group_type}:{self.group_by}"
+            )
+
+        return f"{self.source}:{self.module}:{self.dataset_name}"
+
+
+class DatasetAxisFinalOccurrence(models.Model):
+    project = models.ForeignKey(
+        DatasetAxisFinalProject,
+        on_delete=models.CASCADE,
+        related_name="axis_occurrences",
+    )
+
+    row_index = models.PositiveIntegerField()
+
+    axis_signature = models.CharField(
+        max_length=1024,
+        db_index=True,
+        help_text="axis_type|miRNA|mRNA|lncRNA|circRNA",
+    )
+
+    axis_id = models.CharField(
+        max_length=512,
+        db_index=True,
+    )
+
+    axis_type = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    axis_regulation = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    miRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    mRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    lncRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    circRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    mRNA_log2FC = models.FloatField(null=True, blank=True)
+    mRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    miRNA_log2FC = models.FloatField(null=True, blank=True)
+    miRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    lncRNA_log2FC = models.FloatField(null=True, blank=True)
+    lncRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    circRNA_log2FC = models.FloatField(null=True, blank=True)
+    circRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "dataset_axis_final_occurrence"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "axis_signature"],
+                name="uniq_project_axis_signature",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["axis_signature"],
+                name="idx_axis_occ_signature",
+            ),
+            models.Index(
+                fields=["project", "axis_signature"],
+                name="idx_axis_occ_project_sig",
+            ),
+            models.Index(
+                fields=["miRNA", "mRNA"],
+                name="idx_axis_occ_mirna_mrna",
+            ),
+            models.Index(
+                fields=["miRNA", "mRNA", "lncRNA"],
+                name="idx_axis_occ_lncrna",
+            ),
+            models.Index(
+                fields=["miRNA", "mRNA", "circRNA"],
+                name="idx_axis_occ_circrna",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.project_id}:{self.axis_signature}"
+
+
+class AxisSignatureProjectIndex(models.Model):
+    """
+    Precomputed index:
+        axis_signature -> reference projects
+
+    This table can be rebuilt from DatasetAxisFinalOccurrence.
+    """
+
+    axis_signature = models.CharField(
+        max_length=1024,
+        db_index=True,
+    )
+
+    project = models.ForeignKey(
+        DatasetAxisFinalProject,
+        on_delete=models.CASCADE,
+        related_name="axis_signature_indexes",
+    )
+
+    occurrence = models.ForeignKey(
+        DatasetAxisFinalOccurrence,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="signature_index_rows",
+    )
+
+    source = models.CharField(
+        max_length=20,
+        db_index=True,
+    )
+
+    module = models.CharField(
+        max_length=20,
+        db_index=True,
+    )
+
+    dataset_name = models.CharField(
+        max_length=128,
+        db_index=True,
+    )
+
+    group_type = models.CharField(
+        max_length=20,
+        db_index=True,
+    )
+
+    group_by = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    axis_id = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+    )
+
+    axis_type = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+    )
+
+    axis_regulation = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "axis_signature_project_index"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["axis_signature", "project"],
+                name="uniq_axis_signature_project_index",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["axis_signature"],
+                name="idx_axis_sig_project_sig",
+            ),
+            models.Index(
+                fields=["axis_signature", "source"],
+                name="idx_axis_sig_project_source",
+            ),
+            models.Index(
+                fields=["axis_signature", "dataset_name"],
+                name="idx_axis_sig_project_dataset",
+            ),
+            models.Index(
+                fields=["axis_signature", "group_type"],
+                name="idx_axis_sig_project_group",
+            ),
+            models.Index(
+                fields=["dataset_name", "group_type"],
+                name="idx_axis_sig_dataset_group",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.axis_signature} -> "
+            f"{self.source}:{self.module}:"
+            f"{self.dataset_name}:{self.group_type}:{self.group_by}"
+        )

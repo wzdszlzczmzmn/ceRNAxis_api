@@ -5,8 +5,6 @@ import pandas as pd
 
 WORKFLOW_AXIS_FINAL_FILENAME_SUFFIX = "_ceRNA_axis_final.csv"
 
-WORKFLOW_AXIS_FINAL_FILENAME_SUFFIX = "_ceRNA_axis_final.csv"
-
 WORKFLOW_AXIS_FINAL_CORE_COLUMNS = [
     "axis_id",
     "axis_regulation",

@@ -8,6 +8,7 @@ from analysis.models import (
     PairedCohortTask,
     HybridReferenceTask,
 )
+from analysis.services.axis_final import enrich_axis_final_response_with_project_matches
 
 from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
     WorkflowNetworkViewError,
@@ -48,6 +49,44 @@ class WorkflowAxisFinalDataBaseView(APIView):
 
     def get_extra_response_data(self, task) -> dict:
         return {}
+
+    def should_include_project_matches(self, request) -> bool:
+        """
+        Default: include project matches.
+
+        Use:
+            ?include_project_matches=false
+        to disable matching when debugging or when frontend does not need it.
+        """
+        value = request.query_params.get("include_project_matches")
+
+        if value is None:
+            return True
+
+        value = str(value).strip().lower()
+
+        return value not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+
+    def get_max_matches_per_axis(self, request):
+        value = request.query_params.get("max_matches_per_axis")
+
+        if value is None or value == "":
+            return None
+
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return None
+
+        if value <= 0:
+            return None
+
+        return value
 
     def get(self, request):
         try:
@@ -117,6 +156,17 @@ class WorkflowAxisFinalDataBaseView(APIView):
                 numeric_columns=self.axis_final_numeric_columns,
                 base_response=base_response,
             )
+
+            if self.should_include_project_matches(request):
+                response_data = enrich_axis_final_response_with_project_matches(
+                    response_data=response_data,
+                    max_matches_per_axis=self.get_max_matches_per_axis(request),
+                )
+            else:
+                response_data = {
+                    **response_data,
+                    "axis_project_match_enabled": False,
+                }
 
             return Response(
                 response_data,
