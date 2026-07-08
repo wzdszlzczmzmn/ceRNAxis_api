@@ -1,0 +1,656 @@
+[
+    {
+        "dataset_name": "GSE22050_STAD",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE32548",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE42404",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE146114_GPL10558",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE135304_LUSC",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE48408",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE19915",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE49481",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE26193",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE33382",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE38932",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE30161",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE42127_LUAD",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE45670",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE108712_OTHERS",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE42352",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE135304_OTHERS",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE9638",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE63111",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE10927_PCPG",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE157284",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE73614",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE29621",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE135304_LUAD",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE45168",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE184941",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE33371_PCPG",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE15852",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE151335",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE33371_ACC",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE17710",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE32062_GPL6480",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE31595",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE41271_LUAD",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE45783",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE18670",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE63885",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE10927_ACC",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE33383_GPL6801",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE157010",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE68606_LUAD",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE19949",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE38939",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE40115",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE17907",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE101472_COAD",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE41994",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE42363",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE146553",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE32063",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE65074",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE50081",
+        "group_by": [
+            "c_ajcc_pathologic_n"
+        ]
+    },
+    {
+        "dataset_name": "GSE107591",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE37201",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE8607",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE39582",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE128959",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE19697",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE2787",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE17118",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE104922",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE47404",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE22050_ESCA",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE12972",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE43365",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE14764",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE29702",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE62321",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE75037",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE9891",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE20194",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE89563",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE66272_KIRC",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "TARGET_CCSK",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE130220",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE62932",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE53963",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE66271_KIRC",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE157009",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE26571",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE76019",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE76124",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "TARGET_WT",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE42127_LUSC",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "TARGET_NBL",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE17260",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE38832",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE23554",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE19750",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE157011",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE143985",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE3149",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE40911",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE41271_LUSC",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE20189",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE31448",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE41271_OTHERS",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE83836",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE37200",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE92921",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE97177",
+        "group_by": [
+            "c_ajcc_pathologic_t"
+        ]
+    },
+    {
+        "dataset_name": "GSE29695",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE74553",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE49355",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE32894",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE75316",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE98528",
+        "group_by": [
+            "c_tumor_grade"
+        ]
+    },
+    {
+        "dataset_name": "GSE49997",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    },
+    {
+        "dataset_name": "GSE23822",
+        "group_by": [
+            "c_tumor_stage"
+        ]
+    }
+]

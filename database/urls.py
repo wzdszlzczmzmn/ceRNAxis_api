@@ -70,6 +70,11 @@ urlpatterns = [
          dataset_annotation_views.TIMEDBDatasetAnnotationAvailabilityView.as_view(),
          name='timedb-dataset-annotation-available'),
 
+    # TIMEDB Annotation Options Views
+    path("timedb_dataset_group_by_options/",
+         dataset_annotation_views.TIMEDBAnnotationGroupByOptionsView.as_view(),
+         name="timedb-annotation-group-by-options"),
+
     # Network Views
     path(
         "tcga_dataset_annotation_network/",

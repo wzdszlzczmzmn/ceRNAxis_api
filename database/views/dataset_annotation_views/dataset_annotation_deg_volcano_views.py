@@ -25,7 +25,8 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_timedb_annotation_dir_name,
     get_dataset_annotation_deg_file_path,
     get_dataset_annotation_available_deg_rna_types,
-    get_dataset_annotation_available_deg_scopes,
+    get_dataset_annotation_available_deg_scopes, get_timedb_group_type_query, resolve_timedb_group_annotation_dir_name,
+    resolve_timedb_group_annotation_file_prefix,
 )
 
 
@@ -96,21 +97,51 @@ class BaseDatasetAnnotationDEGVolcanoView(APIView):
 
         return annotation_root_dir
 
-    def get_annotation_file_prefix(
-        self,
-        *,
-        dataset_name: str,
-        annotation_dir_name: str,
-    ) -> str:
-        return annotation_dir_name
+    def get_group_type(self, request):
+        return None
 
-    def resolve_annotation_context(self, dataset_name: str) -> dict:
+    def get_group_by(self, request):
+        group_by = request.query_params.get("group_by")
+
+        if group_by is None:
+            return None
+
+        group_by = str(group_by).strip()
+
+        return group_by or None
+
+    def get_annotation_dir_name(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> str:
         if self.annotation_dir_name_resolver is None:
             raise DatasetAnnotationPathError(
                 "Annotation directory resolver is not configured."
             )
 
-        annotation_dir_name = self.annotation_dir_name_resolver(dataset_name)
+        return self.annotation_dir_name_resolver(dataset_name)
+
+    def get_annotation_file_prefix(
+            self,
+            *,
+            dataset_name: str,
+            annotation_dir_name: str,
+            group_type: str | None = None,
+    ) -> str:
+        return annotation_dir_name
+
+    def resolve_annotation_context(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> dict:
+        annotation_dir_name = self.get_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
 
         annotation_dir = resolve_dataset_annotation_dir(
             annotation_root_dir=self.get_annotation_root_dir(),
@@ -120,10 +151,12 @@ class BaseDatasetAnnotationDEGVolcanoView(APIView):
         file_prefix = self.get_annotation_file_prefix(
             dataset_name=dataset_name,
             annotation_dir_name=annotation_dir_name,
+            group_type=group_type,
         )
 
         return {
             "dataset_name": dataset_name,
+            "group_type": group_type,
             "annotation_dir_name": annotation_dir_name,
             "annotation_file_prefix": file_prefix,
             "annotation_dir": annotation_dir,
@@ -141,6 +174,8 @@ class BaseDatasetAnnotationDEGVolcanoView(APIView):
                 raise RuntimeError("Missing valid_rna_types.")
 
             dataset_name = get_dataset_query_name(request)
+            group_by = self.get_group_by(request)
+            group_type = self.get_group_type(request)
 
             rna_type = str(
                 request.query_params.get(
@@ -209,7 +244,10 @@ class BaseDatasetAnnotationDEGVolcanoView(APIView):
                 )
 
             try:
-                context = self.resolve_annotation_context(dataset_name)
+                context = self.resolve_annotation_context(
+                    dataset_name=dataset_name,
+                    group_type=group_type,
+                )
 
                 available_deg_rna_types = (
                     get_dataset_annotation_available_deg_rna_types(
@@ -275,6 +313,8 @@ class BaseDatasetAnnotationDEGVolcanoView(APIView):
                 "success": True,
                 "source": self.source,
                 "dataset_name": context["dataset_name"],
+                "group_by": group_by,
+                "group_type": group_type,
                 "annotation_dir_name": context["annotation_dir_name"],
                 "annotation_file_prefix": context[
                     "annotation_file_prefix"
@@ -375,3 +415,29 @@ class TIMEDBDatasetAnnotationDEGVolcanoView(
     default_deg_scope = WORKFLOW_DEG_SCOPE_ALL
     default_deg_method = "limma"
     default_use_padj = False
+
+    def get_group_type(self, request):
+        return get_timedb_group_type_query(request)
+
+    def get_annotation_dir_name(
+        self,
+        *,
+        dataset_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
+
+    def get_annotation_file_prefix(
+        self,
+        *,
+        dataset_name: str,
+        annotation_dir_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_file_prefix(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )

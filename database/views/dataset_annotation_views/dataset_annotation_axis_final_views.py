@@ -22,7 +22,8 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_dataset_annotation_dir,
     get_dataset_annotation_axis_final_file_path,
     resolve_tcga_annotation_dir_name,
-    resolve_timedb_annotation_dir_name,
+    resolve_timedb_annotation_dir_name, get_timedb_group_type_query, resolve_timedb_group_annotation_dir_name,
+    resolve_timedb_group_annotation_file_prefix,
 )
 
 
@@ -55,21 +56,51 @@ class BaseDatasetAnnotationAxisFinalDataView(APIView):
 
         return annotation_root_dir
 
-    def get_annotation_file_prefix(
-        self,
-        *,
-        dataset_name: str,
-        annotation_dir_name: str,
-    ) -> str:
-        return annotation_dir_name
+    def get_group_type(self, request):
+        return None
 
-    def get_axis_final_file_info(self, dataset_name: str) -> dict:
+    def get_group_by(self, request):
+        group_by = request.query_params.get("group_by")
+
+        if group_by is None:
+            return None
+
+        group_by = str(group_by).strip()
+
+        return group_by or None
+
+    def get_annotation_dir_name(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> str:
         if self.annotation_dir_name_resolver is None:
             raise DatasetAnnotationPathError(
                 "Annotation directory resolver is not configured."
             )
 
-        annotation_dir_name = self.annotation_dir_name_resolver(dataset_name)
+        return self.annotation_dir_name_resolver(dataset_name)
+
+    def get_annotation_file_prefix(
+            self,
+            *,
+            dataset_name: str,
+            annotation_dir_name: str,
+            group_type: str | None = None,
+    ) -> str:
+        return annotation_dir_name
+
+    def get_axis_final_file_info(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> dict:
+        annotation_dir_name = self.get_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
 
         annotation_dir = resolve_dataset_annotation_dir(
             annotation_root_dir=self.get_annotation_root_dir(),
@@ -79,6 +110,7 @@ class BaseDatasetAnnotationAxisFinalDataView(APIView):
         file_prefix = self.get_annotation_file_prefix(
             dataset_name=dataset_name,
             annotation_dir_name=annotation_dir_name,
+            group_type=group_type,
         )
 
         axis_final_file = get_dataset_annotation_axis_final_file_path(
@@ -88,6 +120,7 @@ class BaseDatasetAnnotationAxisFinalDataView(APIView):
 
         return {
             "dataset_name": dataset_name,
+            "group_type": group_type,
             "annotation_dir_name": annotation_dir_name,
             "annotation_file_prefix": file_prefix,
             "axis_final_file": axis_final_file,
@@ -105,14 +138,19 @@ class BaseDatasetAnnotationAxisFinalDataView(APIView):
                 raise RuntimeError("Missing axis_final_columns.")
 
             dataset_name = get_dataset_query_name(request)
+            group_by = self.get_group_by(request)
+            group_type = self.get_group_type(request)
 
             required_columns = (
-                self.axis_final_required_columns
-                or self.axis_final_columns
+                    self.axis_final_required_columns
+                    or self.axis_final_columns
             )
 
             try:
-                file_info = self.get_axis_final_file_info(dataset_name)
+                file_info = self.get_axis_final_file_info(
+                    dataset_name=dataset_name,
+                    group_type=group_type,
+                )
 
                 axis_file, df = read_axis_final_file_by_path(
                     file_path=file_info["axis_final_file"],
@@ -145,6 +183,8 @@ class BaseDatasetAnnotationAxisFinalDataView(APIView):
                 "success": True,
                 "source": self.source,
                 "dataset_name": file_info["dataset_name"],
+                "group_by": group_by,
+                "group_type": group_type,
                 "annotation_dir_name": file_info["annotation_dir_name"],
                 "annotation_file_prefix": file_info[
                     "annotation_file_prefix"
@@ -226,3 +266,29 @@ class TIMEDBDatasetAnnotationAxisFinalDataView(
 
     axis_final_columns = HYBRID_REFERENCE_AXIS_FINAL_COLUMNS
     axis_final_required_columns = HYBRID_REFERENCE_AXIS_FINAL_REQUIRED_COLUMNS
+
+    def get_group_type(self, request):
+        return get_timedb_group_type_query(request)
+
+    def get_annotation_dir_name(
+        self,
+        *,
+        dataset_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
+
+    def get_annotation_file_prefix(
+        self,
+        *,
+        dataset_name: str,
+        annotation_dir_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_file_prefix(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )

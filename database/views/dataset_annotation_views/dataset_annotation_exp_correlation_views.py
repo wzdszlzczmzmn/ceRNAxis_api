@@ -43,7 +43,8 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_tcga_annotation_dir_name,
     resolve_timedb_annotation_dir_name,
     get_dataset_annotation_exp_correlation_file_path,
-    validate_annotation_dataset_name,
+    validate_annotation_dataset_name, resolve_timedb_group_annotation_dir_name, get_timedb_group_type_query,
+    resolve_timedb_group_annotation_file_prefix,
 )
 
 
@@ -260,19 +261,49 @@ class BaseDatasetAnnotationExpCorrelationMixin:
 
         return annotation_root_dir
 
+    def get_group_type(self, request):
+        return None
+
+    def get_group_by(self, request):
+        group_by = request.query_params.get("group_by")
+
+        if group_by is None:
+            return None
+
+        group_by = str(group_by).strip()
+
+        return group_by or None
+
+    def get_annotation_dir_name(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> str:
+        if self.annotation_dir_name_resolver is None:
+            raise DatasetAnnotationPathError(
+                "Annotation directory resolver is not configured."
+            )
+
+        return self.annotation_dir_name_resolver(dataset_name)
+
     def get_annotation_file_prefix(
-        self,
-        *,
-        dataset_name: str,
-        annotation_dir_name: str,
+            self,
+            *,
+            dataset_name: str,
+            annotation_dir_name: str,
+            group_type: str | None = None,
     ) -> str:
         return annotation_dir_name
 
     def resolve_annotation_context(self, request) -> dict:
         dataset_name = get_dataset_query_name(request)
+        group_by = self.get_group_by(request)
+        group_type = self.get_group_type(request)
 
-        annotation_dir_name = self.annotation_dir_name_resolver(
-            dataset_name
+        annotation_dir_name = self.get_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
         )
 
         annotation_dir = resolve_dataset_annotation_dir(
@@ -283,6 +314,7 @@ class BaseDatasetAnnotationExpCorrelationMixin:
         file_prefix = self.get_annotation_file_prefix(
             dataset_name=dataset_name,
             annotation_dir_name=annotation_dir_name,
+            group_type=group_type,
         )
 
         correlation_file = get_dataset_annotation_exp_correlation_file_path(
@@ -294,6 +326,8 @@ class BaseDatasetAnnotationExpCorrelationMixin:
 
         context = {
             "dataset_name": dataset_name,
+            "group_by": group_by,
+            "group_type": group_type,
             "annotation_dir_name": annotation_dir_name,
             "annotation_file_prefix": file_prefix,
             "annotation_dir": annotation_dir,
@@ -313,6 +347,8 @@ class BaseDatasetAnnotationExpCorrelationMixin:
             "success": True,
             "source": self.source,
             "dataset_name": context["dataset_name"],
+            "group_by": context.get("group_by"),
+            "group_type": context.get("group_type"),
             "annotation_dir_name": context["annotation_dir_name"],
             "annotation_file_prefix": context["annotation_file_prefix"],
             "network_source_task_type": self.network_source_task_type,
@@ -727,6 +763,32 @@ class TIMEDBDatasetAnnotationExpCorrelationMixin:
     )
 
     valid_types = HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
+
+    def get_group_type(self, request):
+        return get_timedb_group_type_query(request)
+
+    def get_annotation_dir_name(
+        self,
+        *,
+        dataset_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
+
+    def get_annotation_file_prefix(
+        self,
+        *,
+        dataset_name: str,
+        annotation_dir_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_file_prefix(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
 
     def get_tcga_type(self, context: dict) -> str:
         metadata = context.get("metadata")

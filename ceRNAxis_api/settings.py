@@ -154,3 +154,4 @@ SCTML_DATASET_BASE_DIR = get_required_directory("SCTML_DATASET_BASE_DIR")
 IMMUNE_ANNOTATION_BASE_DIR = get_required_directory("IMMUNE_ANNOTATION_BASE_DIR")
 DEMO_INPUT_DATA_HOME = os.path.join(BASE_DIR, 'demo_data', 'input_example')
 DATASET_DOWNLOAD_ZIP_DIR = Path(BASE_DIR) / "zip_files" / "dataset"
+TIMEDB_DATASETS_INFO_FILE = os.path.join(BASE_DIR, "data", "TIMEDB_datasets_info.json")

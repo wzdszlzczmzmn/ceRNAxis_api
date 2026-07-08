@@ -11,7 +11,7 @@ from database.utils.dataset_annotation_utils.path_utils import (
     get_dataset_query_name,
     resolve_dataset_annotation_dir,
     resolve_tcga_annotation_dir_name,
-    resolve_timedb_annotation_dir_name,
+    resolve_timedb_annotation_dir_name, build_timedb_group_by_options,
 )
 from database.utils.dataset_annotation_utils.metadata_utils import (
     build_dataset_annotation_metadata,
@@ -159,3 +159,65 @@ class TIMEDBDatasetAnnotationAvailabilityView(
     annotation_dir_name_resolver = staticmethod(
         resolve_timedb_annotation_dir_name
     )
+
+
+class TIMEDBAnnotationGroupByOptionsView(APIView):
+    source = "TIMEDB"
+    annotation_root_setting_name = "TIMEDB_DATASET_ANNOTATIONS_DIR"
+
+    def get_annotation_root_dir(self):
+        annotation_root_dir = getattr(
+            settings,
+            self.annotation_root_setting_name,
+            None,
+        )
+
+        if not annotation_root_dir:
+            raise DatasetAnnotationPathError(
+                f"{self.annotation_root_setting_name} is not configured."
+            )
+
+        return annotation_root_dir
+
+    def get(self, request):
+        try:
+            dataset_name = get_dataset_query_name(request)
+
+            response_data = build_timedb_group_by_options(
+                annotation_root_dir=self.get_annotation_root_dir(),
+                dataset_name=dataset_name,
+            )
+
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK,
+            )
+
+        except DatasetAnnotationInputError as e:
+            return Response(
+                {
+                    "success": False,
+                    "detail": str(e),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except DatasetAnnotationPathError as e:
+            return Response(
+                {
+                    "success": False,
+                    "detail": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return Response(
+                {
+                    "success": False,
+                    "detail": f"Server error: {str(e)}",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

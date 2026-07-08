@@ -23,7 +23,8 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_dataset_annotation_dir,
     resolve_tcga_annotation_dir_name,
     resolve_timedb_annotation_dir_name,
-    get_dataset_annotation_log2fc_background_file_path,
+    get_dataset_annotation_log2fc_background_file_path, get_timedb_group_type_query,
+    resolve_timedb_group_annotation_dir_name, resolve_timedb_group_annotation_file_prefix,
 )
 
 
@@ -72,21 +73,51 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
 
         return annotation_root_dir
 
-    def get_annotation_file_prefix(
-        self,
-        *,
-        dataset_name: str,
-        annotation_dir_name: str,
-    ) -> str:
-        return annotation_dir_name
+    def get_group_type(self, request):
+        return None
 
-    def resolve_annotation_context(self, dataset_name: str) -> dict:
+    def get_group_by(self, request):
+        group_by = request.query_params.get("group_by")
+
+        if group_by is None:
+            return None
+
+        group_by = str(group_by).strip()
+
+        return group_by or None
+
+    def get_annotation_dir_name(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> str:
         if self.annotation_dir_name_resolver is None:
             raise DatasetAnnotationPathError(
                 "Annotation directory resolver is not configured."
             )
 
-        annotation_dir_name = self.annotation_dir_name_resolver(dataset_name)
+        return self.annotation_dir_name_resolver(dataset_name)
+
+    def get_annotation_file_prefix(
+            self,
+            *,
+            dataset_name: str,
+            annotation_dir_name: str,
+            group_type: str | None = None,
+    ) -> str:
+        return annotation_dir_name
+
+    def resolve_annotation_context(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> dict:
+        annotation_dir_name = self.get_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
 
         annotation_dir = resolve_dataset_annotation_dir(
             annotation_root_dir=self.get_annotation_root_dir(),
@@ -96,6 +127,7 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
         file_prefix = self.get_annotation_file_prefix(
             dataset_name=dataset_name,
             annotation_dir_name=annotation_dir_name,
+            group_type=group_type,
         )
 
         background_file = get_dataset_annotation_log2fc_background_file_path(
@@ -105,6 +137,7 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
 
         return {
             "dataset_name": dataset_name,
+            "group_type": group_type,
             "annotation_dir_name": annotation_dir_name,
             "annotation_file_prefix": file_prefix,
             "annotation_dir": annotation_dir,
@@ -123,6 +156,8 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
                 raise RuntimeError("Missing valid_background_types.")
 
             dataset_name = get_dataset_query_name(request)
+            group_by = self.get_group_by(request)
+            group_type = self.get_group_type(request)
 
             requested_type = request.query_params.get("type", None)
 
@@ -133,7 +168,10 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
             )
 
             try:
-                context = self.resolve_annotation_context(dataset_name)
+                context = self.resolve_annotation_context(
+                    dataset_name=dataset_name,
+                    group_type=group_type,
+                )
 
                 background_file, df = read_log2fc_background_file_by_path(
                     context["background_file"]
@@ -195,6 +233,8 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
                 "success": True,
                 "source": self.source,
                 "dataset_name": context["dataset_name"],
+                "group_by": group_by,
+                "group_type": group_type,
                 "annotation_dir_name": context["annotation_dir_name"],
                 "annotation_file_prefix": context[
                     "annotation_file_prefix"
@@ -274,3 +314,29 @@ class TIMEDBDatasetAnnotationLog2FCCorrelationView(
     )
 
     valid_background_types = HYBRID_REFERENCE_VALID_BACKGROUND_TYPES
+
+    def get_group_type(self, request):
+        return get_timedb_group_type_query(request)
+
+    def get_annotation_dir_name(
+        self,
+        *,
+        dataset_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
+
+    def get_annotation_file_prefix(
+        self,
+        *,
+        dataset_name: str,
+        annotation_dir_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_file_prefix(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )

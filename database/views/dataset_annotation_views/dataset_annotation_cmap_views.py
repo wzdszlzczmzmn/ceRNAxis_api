@@ -20,7 +20,8 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_dataset_annotation_dir,
     get_dataset_annotation_cmap_file_path,
     resolve_tcga_annotation_dir_name,
-    resolve_timedb_annotation_dir_name,
+    resolve_timedb_annotation_dir_name, get_timedb_group_type_query, resolve_timedb_group_annotation_dir_name,
+    resolve_timedb_group_annotation_file_prefix,
 )
 
 
@@ -62,11 +63,38 @@ class BaseDatasetAnnotationCMapResultView(APIView):
 
         return annotation_root_dir
 
+    def get_group_type(self, request):
+        return None
+
+    def get_group_by(self, request):
+        group_by = request.query_params.get("group_by")
+
+        if group_by is None:
+            return None
+
+        group_by = str(group_by).strip()
+
+        return group_by or None
+
+    def get_annotation_dir_name(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> str:
+        if self.annotation_dir_name_resolver is None:
+            raise DatasetAnnotationPathError(
+                "Annotation directory resolver is not configured."
+            )
+
+        return self.annotation_dir_name_resolver(dataset_name)
+
     def get_annotation_file_prefix(
-        self,
-        *,
-        dataset_name: str,
-        annotation_dir_name: str,
+            self,
+            *,
+            dataset_name: str,
+            annotation_dir_name: str,
+            group_type: str | None = None,
     ) -> str:
         """
         Default:
@@ -75,13 +103,16 @@ class BaseDatasetAnnotationCMapResultView(APIView):
         """
         return annotation_dir_name
 
-    def get_cmap_file_info(self, dataset_name: str) -> dict:
-        if self.annotation_dir_name_resolver is None:
-            raise DatasetAnnotationPathError(
-                "Annotation directory resolver is not configured."
-            )
-
-        annotation_dir_name = self.annotation_dir_name_resolver(dataset_name)
+    def get_cmap_file_info(
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
+    ) -> dict:
+        annotation_dir_name = self.get_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
 
         annotation_dir = resolve_dataset_annotation_dir(
             annotation_root_dir=self.get_annotation_root_dir(),
@@ -91,6 +122,7 @@ class BaseDatasetAnnotationCMapResultView(APIView):
         file_prefix = self.get_annotation_file_prefix(
             dataset_name=dataset_name,
             annotation_dir_name=annotation_dir_name,
+            group_type=group_type,
         )
 
         cmap_file = get_dataset_annotation_cmap_file_path(
@@ -100,6 +132,7 @@ class BaseDatasetAnnotationCMapResultView(APIView):
 
         return {
             "dataset_name": dataset_name,
+            "group_type": group_type,
             "annotation_dir_name": annotation_dir_name,
             "annotation_file_prefix": file_prefix,
             "cmap_file": cmap_file,
@@ -114,9 +147,14 @@ class BaseDatasetAnnotationCMapResultView(APIView):
                 raise RuntimeError("Missing network_source_task_type.")
 
             dataset_name = get_dataset_query_name(request)
+            group_by = self.get_group_by(request)
+            group_type = self.get_group_type(request)
 
             try:
-                file_info = self.get_cmap_file_info(dataset_name)
+                file_info = self.get_cmap_file_info(
+                    dataset_name=dataset_name,
+                    group_type=group_type,
+                )
 
                 cmap_file, df = read_cmap_file_by_path(
                     file_path=file_info["cmap_file"],
@@ -149,6 +187,8 @@ class BaseDatasetAnnotationCMapResultView(APIView):
                 "success": True,
                 "source": self.source,
                 "dataset_name": file_info["dataset_name"],
+                "group_by": group_by,
+                "group_type": group_type,
                 "annotation_dir_name": file_info["annotation_dir_name"],
                 "annotation_file_prefix": file_info[
                     "annotation_file_prefix"
@@ -226,3 +266,29 @@ class TIMEDBDatasetAnnotationCMapResultView(
     )
 
     required_columns = HYBRID_REFERENCE_CMAP_REQUIRED_COLUMNS
+
+    def get_group_type(self, request):
+        return get_timedb_group_type_query(request)
+
+    def get_annotation_dir_name(
+        self,
+        *,
+        dataset_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_dir_name(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
+
+    def get_annotation_file_prefix(
+        self,
+        *,
+        dataset_name: str,
+        annotation_dir_name: str,
+        group_type: str | None = None,
+    ) -> str:
+        return resolve_timedb_group_annotation_file_prefix(
+            dataset_name=dataset_name,
+            group_type=group_type,
+        )
