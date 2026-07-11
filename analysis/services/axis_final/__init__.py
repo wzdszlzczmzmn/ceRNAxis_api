@@ -6,6 +6,7 @@ from .axis_signature import (
     add_axis_signature_to_dataframe,
     add_axis_signature_to_records,
     normalize_axis_signature_value,
+    parse_axis_signature,
 )
 
 from .module2_import import (
@@ -29,6 +30,12 @@ from .project_match import (
     enrich_axis_final_response_with_project_matches,
 )
 
+from .recurrent_summary import (
+    rebuild_axis_recurrent_summary,
+    iter_axis_recurrent_summary_objects,
+    get_axis_recurrent_summary_source_stats,
+)
+
 __all__ = [
     "AXIS_SIGNATURE_FIELDS",
     "build_axis_signature",
@@ -37,6 +44,7 @@ __all__ = [
     "add_axis_signature_to_dataframe",
     "add_axis_signature_to_records",
     "normalize_axis_signature_value",
+    "parse_axis_signature",
 
     "import_module2_axis_final_projects",
     "import_one_module2_axis_final_project",
@@ -50,4 +58,8 @@ __all__ = [
 
     "attach_project_matches_to_axis_records",
     "enrich_axis_final_response_with_project_matches",
+
+    "rebuild_axis_recurrent_summary",
+    "iter_axis_recurrent_summary_objects",
+    "get_axis_recurrent_summary_source_stats",
 ]

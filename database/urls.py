@@ -1,6 +1,6 @@
 from django.urls import path
 
-from database.views import cerna_axis_views, cerna_axis_network_views, dataset_views
+from database.views import cerna_axis_views, cerna_axis_network_views, dataset_views, axis_recurrent_views
 from database.views.dataset_annotation_views import dataset_annotation_views, dataset_annotation_network_views, \
     dataset_annotation_axis_final_views, dataset_annotation_cmap_views, dataset_annotation_deg_volcano_views, \
     dataset_annotation_log2fc_correlation_views, dataset_annotation_survival_views, \
@@ -16,6 +16,12 @@ urlpatterns = [
     path('dataset_metadata/', dataset_views.DatasetMetadataListView.as_view(), name="dataset-metadata-list"),
     path('dataset_metadata/<str:dataset>/', dataset_views.DatasetMetadataDetailView.as_view(),
          name='dataset-metadata-detail'),
+
+    # Recurrent ceRNA Views
+    path("axis_recurrent_records/", axis_recurrent_views.AxisRecurrentSummarySearchView.as_view(),
+         name="axis-recurrent-search"),
+    path("axis_recurrent_meta/", axis_recurrent_views.AxisRecurrentMetaView.as_view(),
+         name="axis-recurrent-meta"),
 
     # Dataset File Download Views
     path('dataset_data_download/', dataset_views.DatasetDownloadView.as_view(),

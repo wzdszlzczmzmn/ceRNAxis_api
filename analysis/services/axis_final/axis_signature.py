@@ -21,6 +21,9 @@ EMPTY_AXIS_VALUES = {
 }
 
 
+AXIS_SIGNATURE_PART_COUNT = 5
+
+
 def normalize_axis_signature_value(value) -> str:
     """
     Normalize one axis component before building axis_signature.
@@ -148,3 +151,30 @@ def add_axis_signature_to_records(
         )
 
     return enriched_records
+
+
+def parse_axis_signature(axis_signature: str) -> dict:
+    """
+    Parse:
+        axis_type|miRNA|mRNA|lncRNA|circRNA
+
+    Empty lncRNA/circRNA parts are preserved.
+    """
+    axis_signature = str(axis_signature or "").strip()
+
+    parts = axis_signature.split("|", AXIS_SIGNATURE_PART_COUNT - 1)
+
+    if len(parts) < AXIS_SIGNATURE_PART_COUNT:
+        parts.extend(
+            [""] * (AXIS_SIGNATURE_PART_COUNT - len(parts))
+        )
+
+    axis_type, mirna, mrna, lncrna, circrna = parts
+
+    return {
+        "axis_type": axis_type.strip(),
+        "miRNA": mirna.strip(),
+        "mRNA": mrna.strip(),
+        "lncRNA": lncrna.strip(),
+        "circRNA": circrna.strip(),
+    }

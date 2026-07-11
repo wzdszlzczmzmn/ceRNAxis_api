@@ -593,3 +593,133 @@ class AxisSignatureProjectIndex(models.Model):
             f"{self.source}:{self.module}:"
             f"{self.dataset_name}:{self.group_type}:{self.group_by}"
         )
+
+
+class AxisRecurrentSummary(models.Model):
+    """
+    Precomputed recurrent summary for one structural ceRNA axis.
+
+    Rebuildable from AxisSignatureProjectIndex.
+    """
+
+    axis_signature = models.CharField(
+        max_length=1024,
+        unique=True,
+        db_index=True,
+    )
+
+    axis_type = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    miRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    mRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    lncRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    circRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    project_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+
+    dataset_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+
+    tcga_project_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+
+    timedb_project_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+
+    regulation_pattern_count = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Number of distinct non-empty axis_regulation patterns."
+        ),
+    )
+
+    dominant_axis_regulation = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    dominant_regulation_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    regulation_consistent = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "True when all non-empty occurrences have the same "
+            "axis_regulation pattern."
+        ),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "axis_recurrent_summary"
+        indexes = [
+            models.Index(
+                fields=["-project_count", "axis_signature"],
+                name="idx_axis_recur_project_count",
+            ),
+            models.Index(
+                fields=["-dataset_count", "axis_signature"],
+                name="idx_axis_recur_dataset_count",
+            ),
+            models.Index(
+                fields=["axis_type", "-project_count"],
+                name="idx_axis_recur_type_count",
+            ),
+            models.Index(
+                fields=["regulation_consistent", "-project_count"],
+                name="idx_axis_recur_reg_count",
+            ),
+            models.Index(
+                fields=["miRNA", "mRNA"],
+                name="idx_axis_recur_mirna_mrna",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.axis_signature}: "
+            f"{self.project_count} projects"
+        )
