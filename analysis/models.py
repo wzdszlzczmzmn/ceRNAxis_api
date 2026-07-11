@@ -9,6 +9,8 @@ def default_rnas():
     return {
         "miRNA": [],
         "mRNA": [],
+        "mRNA_up": [],
+        "mRNA_down": [],
         "lncRNA": [],
         "circRNA": [],
     }
@@ -73,18 +75,22 @@ class CustomListQueryTask(models.Model):
         help_text="Cancer type used by run_module1.sh, e.g. ACC.",
     )
 
-    # 当前阶段固定为 False；预留给后续 directional mRNA 分支。
     has_mrna_direction = models.BooleanField(
         default=False,
+        db_index=True,
         help_text=(
             "Whether mRNA input is directional. "
-            "Currently fixed to False for frontend submission."
+            "When true, mRNA_up and mRNA_down are used "
+            "instead of the standard mRNA list."
         ),
     )
 
     rnas = models.JSONField(
         default=default_rnas,
-        help_text="Input RNA lists grouped by miRNA, mRNA, lncRNA and circRNA.",
+        help_text=(
+            "Input RNA lists grouped by miRNA, mRNA, "
+            "mRNA_up, mRNA_down, lncRNA and circRNA."
+        ),
     )
 
     class Meta:
@@ -137,6 +143,14 @@ class CustomListQueryTask(models.Model):
         return self.get_rna_count("mRNA")
 
     @property
+    def mRNA_up_count(self):
+        return self.get_rna_count("mRNA_up")
+
+    @property
+    def mRNA_down_count(self):
+        return self.get_rna_count("mRNA_down")
+
+    @property
     def lncRNA_count(self):
         return self.get_rna_count("lncRNA")
 
@@ -147,10 +161,12 @@ class CustomListQueryTask(models.Model):
     @property
     def total_rna_count(self):
         return (
-            self.miRNA_count
-            + self.mRNA_count
-            + self.lncRNA_count
-            + self.circRNA_count
+                self.miRNA_count
+                + self.mRNA_count
+                + self.mRNA_up_count
+                + self.mRNA_down_count
+                + self.lncRNA_count
+                + self.circRNA_count
         )
 
 

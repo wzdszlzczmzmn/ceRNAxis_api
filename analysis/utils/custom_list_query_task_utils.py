@@ -2,8 +2,15 @@ import csv
 from pathlib import Path
 import re
 
-ALLOWED_RNA_TYPES = ["miRNA", "mRNA", "lncRNA", "circRNA"]
-MAX_TOTAL_RNA_COUNT = 120
+ALLOWED_RNA_TYPES = [
+    "miRNA",
+    "mRNA",
+    "mRNA_up",
+    "mRNA_down",
+    "lncRNA",
+    "circRNA",
+]
+MAX_TOTAL_RNA_COUNT = 150
 
 CANCER_TYPE_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
@@ -19,6 +26,37 @@ class CustomListQueryTaskInputError(ValueError):
 
 class CustomListQueryPathError(ValueError):
     pass
+
+
+def parse_boolean_value(
+    value,
+    *,
+    field_name: str,
+    default=None,
+) -> bool:
+    if value is None or str(value).strip() == "":
+        if default is not None:
+            return default
+
+        raise CustomListQueryTaskInputError(
+            f"Missing field: {field_name}."
+        )
+
+    if isinstance(value, bool):
+        return value
+
+    normalized = str(value).strip().lower()
+
+    if normalized in {"true", "1", "yes", "y"}:
+        return True
+
+    if normalized in {"false", "0", "no", "n"}:
+        return False
+
+    raise CustomListQueryTaskInputError(
+        f"Invalid boolean field: {field_name}. "
+        "Allowed values are true or false."
+    )
 
 
 def normalize_rna_list(value) -> list[str]:
@@ -43,9 +81,26 @@ def normalize_rna_list(value) -> list[str]:
     return normalized
 
 
-def normalize_rnas(rnas) -> dict[str, list[str]]:
+def normalize_rnas(
+    rnas,
+    *,
+    has_mrna_direction: bool,
+) -> dict[str, list[str]]:
+    """
+    Normalize RNA inputs according to the selected mRNA mode.
+
+    Non-directional mode:
+        - mRNA is active
+        - mRNA_up and mRNA_down must be empty
+
+    Directional mode:
+        - mRNA_up and mRNA_down are active
+        - mRNA must be empty
+    """
     if not isinstance(rnas, dict):
-        raise CustomListQueryTaskInputError("Field 'rnas' must be an object.")
+        raise CustomListQueryTaskInputError(
+            "Field 'rnas' must be an object."
+        )
 
     unknown_keys = set(rnas.keys()) - set(ALLOWED_RNA_TYPES)
 
@@ -62,12 +117,39 @@ def normalize_rnas(rnas) -> dict[str, list[str]]:
             normalized[rna_type] = normalize_rna_list(
                 rnas.get(rna_type, [])
             )
-        except CustomListQueryTaskInputError:
+        except CustomListQueryTaskInputError as exc:
             raise CustomListQueryTaskInputError(
                 f"Field 'rnas.{rna_type}' must be a list."
+            ) from exc
+
+    if has_mrna_direction:
+        if normalized["mRNA"]:
+            raise CustomListQueryTaskInputError(
+                "Field 'rnas.mRNA' must be empty when "
+                "has_mRNA_direction is true."
             )
 
-    total_count = sum(len(values) for values in normalized.values())
+        if (
+            not normalized["mRNA_up"]
+            and not normalized["mRNA_down"]
+        ):
+            raise CustomListQueryTaskInputError(
+                "At least one of 'rnas.mRNA_up' or "
+                "'rnas.mRNA_down' must be provided when "
+                "has_mRNA_direction is true."
+            )
+
+    else:
+        if normalized["mRNA_up"] or normalized["mRNA_down"]:
+            raise CustomListQueryTaskInputError(
+                "Fields 'rnas.mRNA_up' and 'rnas.mRNA_down' "
+                "must be empty when has_mRNA_direction is false."
+            )
+
+    total_count = sum(
+        len(values)
+        for values in normalized.values()
+    )
 
     if total_count == 0:
         raise CustomListQueryTaskInputError(

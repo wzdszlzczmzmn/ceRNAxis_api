@@ -9,7 +9,8 @@ from rest_framework import status
 from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
 from analysis.slurm_sbtch import sbatch_custom_list_query_task, sbatch_paired_cohort_task, sbatch_hybrid_reference_task
 from analysis.utils.custom_list_query_task_utils import CustomListQueryTaskInputError, \
-    prepare_custom_list_query_workspace, CustomListQueryPathError, validate_cancer_type, normalize_rnas
+    prepare_custom_list_query_workspace, CustomListQueryPathError, validate_cancer_type, normalize_rnas, \
+    parse_boolean_value
 from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_task_params, \
     HybridReferenceTaskInputError, HybridReferenceTaskPathError, HYBRID_REFERENCE_ALLOWED_FILE_FIELDS, \
     prepare_hybrid_reference_workspace, save_hybrid_reference_uploaded_input_files, \
@@ -28,8 +29,14 @@ class CustomListQueryTaskSubmitView(APIView):
 
     def post(self, request):
         try:
-            task_name = str(request.data.get("task_name", "")).strip()
-            cancer_type = str(request.data.get("cancer_type", "")).strip()
+            task_name = str(
+                request.data.get("task_name", "")
+            ).strip()
+
+            cancer_type = str(
+                request.data.get("cancer_type", "")
+            ).strip()
+
             rnas = request.data.get("rnas")
 
             if not task_name:
@@ -42,23 +49,30 @@ class CustomListQueryTaskSubmitView(APIView):
                 )
 
             try:
-                cancer_type = validate_cancer_type(cancer_type)
-            except CustomListQueryTaskInputError as e:
-                return Response(
-                    {
-                        "success": False,
-                        "msg": str(e),
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
+                cancer_type = validate_cancer_type(
+                    cancer_type
                 )
 
-            try:
-                normalized_rnas = normalize_rnas(rnas)
-            except CustomListQueryTaskInputError as e:
+                has_mrna_direction = parse_boolean_value(
+                    request.data.get(
+                        "has_mRNA_direction"
+                    ),
+                    field_name="has_mRNA_direction",
+                    default=False,
+                )
+
+                normalized_rnas = normalize_rnas(
+                    rnas,
+                    has_mrna_direction=(
+                        has_mrna_direction
+                    ),
+                )
+
+            except CustomListQueryTaskInputError as exc:
                 return Response(
                     {
                         "success": False,
-                        "msg": str(e),
+                        "msg": str(exc),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -68,42 +82,66 @@ class CustomListQueryTaskSubmitView(APIView):
                 task_name=task_name,
                 status=CustomListQueryTask.Status.Pending,
                 cancer_type=cancer_type,
-                has_mrna_direction=False,
+                has_mrna_direction=has_mrna_direction,
                 rnas=normalized_rnas,
             )
 
             try:
                 prepare_custom_list_query_workspace(task)
+
             except (
                 OSError,
                 CustomListQueryTaskInputError,
                 CustomListQueryPathError,
-            ) as e:
-                task.status = CustomListQueryTask.Status.Failed
+            ) as exc:
+                task.status = (
+                    CustomListQueryTask.Status.Failed
+                )
                 task.finish_time = timezone.now()
-                task.save(update_fields=["status", "finish_time"])
+                task.save(
+                    update_fields=[
+                        "status",
+                        "finish_time",
+                    ]
+                )
 
                 return Response(
                     {
                         "success": False,
-                        "msg": f"Failed to prepare task workspace: {str(e)}",
+                        "msg": (
+                            "Failed to prepare task workspace: "
+                            f"{str(exc)}"
+                        ),
                     },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    status=(
+                        status.HTTP_500_INTERNAL_SERVER_ERROR
+                    ),
                 )
 
-            submit_result = sbatch_custom_list_query_task(task.uuid)
+            submit_result = sbatch_custom_list_query_task(
+                task.uuid
+            )
 
             if not submit_result["success"]:
-                task.status = CustomListQueryTask.Status.Failed
+                task.status = (
+                    CustomListQueryTask.Status.Failed
+                )
                 task.finish_time = timezone.now()
-                task.save(update_fields=["status", "finish_time"])
+                task.save(
+                    update_fields=[
+                        "status",
+                        "finish_time",
+                    ]
+                )
 
                 return Response(
                     {
                         "success": False,
                         "msg": submit_result["msg"],
                     },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    status=(
+                        status.HTTP_500_INTERNAL_SERVER_ERROR
+                    ),
                 )
 
             return Response(
@@ -119,10 +157,14 @@ class CustomListQueryTaskSubmitView(APIView):
                             task.create_time
                         ).strftime("%Y-%m-%d %H:%M:%S"),
                         "cancer_type": task.cancer_type,
-                        "has_mRNA_direction": task.has_mrna_direction,
+                        "has_mRNA_direction": (
+                            task.has_mrna_direction
+                        ),
                         "rna_counts": {
                             "miRNA": task.miRNA_count,
                             "mRNA": task.mRNA_count,
+                            "mRNA_up": task.mRNA_up_count,
+                            "mRNA_down": task.mRNA_down_count,
                             "lncRNA": task.lncRNA_count,
                             "circRNA": task.circRNA_count,
                             "total": task.total_rna_count,
@@ -132,15 +174,17 @@ class CustomListQueryTaskSubmitView(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
-        except Exception as e:
+        except Exception as exc:
             print(traceback.format_exc())
 
             return Response(
                 {
                     "success": False,
-                    "msg": f"Server error: {str(e)}",
+                    "msg": f"Server error: {str(exc)}",
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR
+                ),
             )
 
 

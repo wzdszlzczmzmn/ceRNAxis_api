@@ -84,18 +84,66 @@ def sbatch_custom_list_query_task(task_uuid) -> dict:
 
         rnas = task.rnas or {}
 
-        miRNA_str = _join_rna_values(rnas.get("miRNA"))
-        mRNA_str = _join_rna_values(rnas.get("mRNA"))
-        lncRNA_str = _join_rna_values(rnas.get("lncRNA"))
-        circRNA_str = _join_rna_values(rnas.get("circRNA"))
+        if not isinstance(rnas, dict):
+            raise ValueError(
+                "Invalid rnas value for custom list query task."
+            )
 
-        # 当前阶段固定走非 directional mRNA 分支。
-        mRNA_str_up = ""
-        mRNA_str_down = ""
-        has_mRNA_direction = "False"
+        has_mrna_direction = bool(
+            task.has_mrna_direction
+        )
 
-        # 如果以后开放 directional 分支，可以改成：
-        # has_mRNA_direction = "True" if task.has_mrna_direction else "False"
+        miRNA_str = _join_rna_values(
+            rnas.get("miRNA")
+        )
+
+        lncRNA_str = _join_rna_values(
+            rnas.get("lncRNA")
+        )
+
+        circRNA_str = _join_rna_values(
+            rnas.get("circRNA")
+        )
+
+        if has_mrna_direction:
+            if _join_rna_values(rnas.get("mRNA")):
+                raise ValueError(
+                    "Standard mRNA list must be empty in "
+                    "directional mRNA mode."
+                )
+
+            mRNA_str = ""
+            mRNA_str_up = _join_rna_values(
+                rnas.get("mRNA_up")
+            )
+            mRNA_str_down = _join_rna_values(
+                rnas.get("mRNA_down")
+            )
+
+            if not mRNA_str_up and not mRNA_str_down:
+                raise ValueError(
+                    "Directional mRNA mode requires at least one "
+                    "mRNA_up or mRNA_down value."
+                )
+
+            has_mRNA_direction = "True"
+
+        else:
+            if (
+                    _join_rna_values(rnas.get("mRNA_up"))
+                    or _join_rna_values(rnas.get("mRNA_down"))
+            ):
+                raise ValueError(
+                    "mRNA_up and mRNA_down must be empty in "
+                    "non-directional mRNA mode."
+                )
+
+            mRNA_str = _join_rna_values(
+                rnas.get("mRNA")
+            )
+            mRNA_str_up = ""
+            mRNA_str_down = ""
+            has_mRNA_direction = "False"
 
     except Exception as e:
         return {
