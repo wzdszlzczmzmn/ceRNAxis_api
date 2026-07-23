@@ -163,20 +163,16 @@ case "${data_type}" in
         expected_id_column="spot_id"
         ;;
     *)
-        fail_task (
-            "Invalid data_type: ${data_type}. "
-            "Allowed values: sc, st."
-        )
+        fail_task \
+            "Invalid data_type: ${data_type}. Allowed values: sc, st."
         ;;
 esac
 
 
 if [ "${use_padj}" != "TRUE" ] &&
    [ "${use_padj}" != "FALSE" ]; then
-    fail_task (
-        "Invalid use_padj: ${use_padj}. "
-        "Allowed values: TRUE, FALSE."
-    )
+    fail_task \
+        "Invalid use_padj: ${use_padj}. Allowed values: TRUE, FALSE."
 fi
 
 
@@ -184,10 +180,8 @@ case "${exp_file,,}" in
     *.parquet)
         ;;
     *)
-        fail_task (
-            "Invalid exp_file extension: ${exp_file}. "
-            "Expected a .parquet file."
-        )
+        fail_task \
+            "Invalid exp_file extension: ${exp_file}. Expected a .parquet file."
         ;;
 esac
 
@@ -196,10 +190,8 @@ case "${meta_file,,}" in
     *.csv)
         ;;
     *)
-        fail_task (
-            "Invalid meta_file extension: ${meta_file}. "
-            "Expected a .csv file."
-        )
+        fail_task \
+            "Invalid meta_file extension: ${meta_file}. Expected a .csv file."
         ;;
 esac
 
@@ -242,17 +234,14 @@ finished_time=$(date +"%Y-%m-%d %H:%M:%S")
 
 
 if [ "${script_exit_code}" -ne 0 ]; then
-    echo (
-        "SC/ST Hybrid Reference task failed at "
-        "${finished_time}, exit code: ${script_exit_code}"
-    ) >&2
+    echo \
+        "SC/ST Hybrid Reference task failed at ${finished_time}, exit code: ${script_exit_code}" \
+        >&2
 
     write_status "fail"
 else
-    echo (
-        "SC/ST Hybrid Reference task completed successfully "
-        "at ${finished_time}"
-    )
+    echo \
+        "SC/ST Hybrid Reference task completed successfully at ${finished_time}"
 
     write_status "success"
 fi
