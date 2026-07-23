@@ -1,21 +1,21 @@
 import uuid as uuid_lib
-from datetime import datetime
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from analysis.models import PairedCohortTask
 
 
-DEMO_UUID = "2c09007c-e03e-43bb-a126-4757dd1326be"
+DEMO_UUID = "37051bf6-5b88-4ec8-a958-b36a28070109"
 DEMO_TASK_NAME = "demo_task"
 DEMO_MAP_INFO = "ImmiRImmiR_LUAD"
 DEMO_DEG_METHOD = "limma"
 DEMO_CANCER_TYPE = "LUAD"
 DEMO_USE_PADJ = False
 
-DEMO_CREATE_TIME = "2026-06-26 10:39:03"
-DEMO_FINISH_TIME = "2026-06-26 10:54:44"
+DEMO_CREATE_TIME = "2026-07-22T03:20:39.487Z"
+DEMO_FINISH_TIME = "2026-07-22T03:40:03Z"
 
 DEMO_MRNA_FILE = "mrna.csv"
 DEMO_MIRNA_FILE = "mirna.csv"
@@ -36,16 +36,32 @@ DEMO_LOGFC_CUTOFF_CIRCRNA = 1e-6
 DEMO_PADJ_CUTOFF_CIRCRNA = 0.3
 
 
-def make_aware_datetime(datetime_string: str):
-    naive_dt = datetime.strptime(datetime_string, "%Y-%m-%d %H:%M:%S")
+def parse_task_datetime(datetime_string: str):
+    """
+    Parse an ISO 8601 datetime string and return a timezone-aware datetime.
 
-    if timezone.is_aware(naive_dt):
-        return naive_dt
+    Supported examples:
+        2026-07-22T03:20:39.487Z
+        2026-07-22T03:40:03Z
+        2026-07-22T03:40:03+00:00
+        2026-07-22 12:40:03
+    """
+    parsed_datetime = parse_datetime(datetime_string)
 
-    return timezone.make_aware(
-        naive_dt,
-        timezone.get_current_timezone(),
-    )
+    if parsed_datetime is None:
+        raise CommandError(
+            f"Invalid datetime value: {datetime_string}. "
+            "Use an ISO 8601 datetime such as "
+            "'2026-07-22T03:20:39.487Z'."
+        )
+
+    if timezone.is_naive(parsed_datetime):
+        parsed_datetime = timezone.make_aware(
+            parsed_datetime,
+            timezone.get_current_timezone(),
+        )
+
+    return parsed_datetime
 
 
 class Command(BaseCommand):
@@ -207,29 +223,37 @@ class Command(BaseCommand):
         parser.add_argument(
             "--create-time",
             default=DEMO_CREATE_TIME,
-            help="Create time, format: YYYY-MM-DD HH:MM:SS.",
+            help=(
+                "Task creation time in ISO 8601 format. "
+                "Example: 2026-07-22T03:20:39.487Z."
+            ),
         )
 
         parser.add_argument(
             "--finish-time",
             default=DEMO_FINISH_TIME,
-            help="Finish time, format: YYYY-MM-DD HH:MM:SS.",
+            help=(
+                "Task finish time in ISO 8601 format. "
+                "Example: 2026-07-22T03:40:03Z."
+            ),
         )
 
     def handle(self, *args, **options):
         try:
             task_uuid = uuid_lib.UUID(options["uuid"])
-        except ValueError as e:
-            raise CommandError(f"Invalid UUID: {options['uuid']}") from e
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise CommandError(
+                f"Invalid UUID: {options['uuid']}"
+            ) from exc
 
         task_status = options["status"]
-        create_time = make_aware_datetime(options["create_time"])
+        create_time = parse_task_datetime(options["create_time"])
 
         if task_status in {
             PairedCohortTask.Status.Success,
             PairedCohortTask.Status.Failed,
         }:
-            finish_time = make_aware_datetime(options["finish_time"])
+            finish_time = parse_task_datetime(options["finish_time"])
         else:
             finish_time = None
 
@@ -239,7 +263,6 @@ class Command(BaseCommand):
                 "user": options["user"],
                 "task_name": options["task_name"],
                 "status": task_status,
-                "finish_time": finish_time,
                 "map_info": options["map_info"],
                 "deg_method": options["deg_method"],
                 "cancer_type": options["cancer_type"],
@@ -255,12 +278,21 @@ class Command(BaseCommand):
                 "padj_cutoff_mirna": options["padj_cutoff_mirna"],
                 "logfc_cutoff_lncrna": options["logfc_cutoff_lncrna"],
                 "padj_cutoff_lncrna": options["padj_cutoff_lncrna"],
-                "logfc_cutoff_circrna": options["logfc_cutoff_circrna"],
-                "padj_cutoff_circrna": options["padj_cutoff_circrna"],
+                "logfc_cutoff_circrna": options[
+                    "logfc_cutoff_circrna"
+                ],
+                "padj_cutoff_circrna": options[
+                    "padj_cutoff_circrna"
+                ],
+                "finish_time": finish_time,
             },
         )
 
-        PairedCohortTask.objects.filter(uuid=task_uuid).update(
+        # create_time 使用 auto_now_add=True，不能通过 save() 正常覆盖。
+        # 因此在记录创建或更新后，通过 QuerySet.update() 设置原始时间。
+        PairedCohortTask.objects.filter(
+            uuid=task_uuid,
+        ).update(
             create_time=create_time,
         )
 
@@ -273,11 +305,14 @@ class Command(BaseCommand):
                 f"Demo PairedCohortTask {action}: {task.uuid}"
             )
         )
-        self.stdout.write(f"task_name: {task.task_name}")
+
+        self.stdout.write(f"id: {task.id}")
+        self.stdout.write(f"uuid: {task.uuid}")
         self.stdout.write(f"user: {task.user}")
-        self.stdout.write(f"status: {task.status} ({task.get_status_display()})")
-        self.stdout.write(f"create_time: {task.create_time}")
-        self.stdout.write(f"finish_time: {task.finish_time}")
+        self.stdout.write(f"task_name: {task.task_name}")
+        self.stdout.write(
+            f"status: {task.status} ({task.get_status_display()})"
+        )
         self.stdout.write(f"map_info: {task.map_info}")
         self.stdout.write(f"deg_method: {task.deg_method}")
         self.stdout.write(f"cancer_type: {task.cancer_type}")
@@ -289,18 +324,43 @@ class Command(BaseCommand):
         self.stdout.write(f"circrna_file: {task.circrna_file}")
         self.stdout.write(f"meta_file: {task.meta_file}")
 
-        self.stdout.write(f"logfc_cutoff_mrna: {task.logfc_cutoff_mrna}")
-        self.stdout.write(f"padj_cutoff_mrna: {task.padj_cutoff_mrna}")
+        self.stdout.write(
+            f"logfc_cutoff_mrna: {task.logfc_cutoff_mrna}"
+        )
+        self.stdout.write(
+            f"padj_cutoff_mrna: {task.padj_cutoff_mrna}"
+        )
 
-        self.stdout.write(f"logfc_cutoff_mirna: {task.logfc_cutoff_mirna}")
-        self.stdout.write(f"padj_cutoff_mirna: {task.padj_cutoff_mirna}")
+        self.stdout.write(
+            f"logfc_cutoff_mirna: {task.logfc_cutoff_mirna}"
+        )
+        self.stdout.write(
+            f"padj_cutoff_mirna: {task.padj_cutoff_mirna}"
+        )
 
-        self.stdout.write(f"logfc_cutoff_lncrna: {task.logfc_cutoff_lncrna}")
-        self.stdout.write(f"padj_cutoff_lncrna: {task.padj_cutoff_lncrna}")
+        self.stdout.write(
+            f"logfc_cutoff_lncrna: {task.logfc_cutoff_lncrna}"
+        )
+        self.stdout.write(
+            f"padj_cutoff_lncrna: {task.padj_cutoff_lncrna}"
+        )
 
-        self.stdout.write(f"logfc_cutoff_circrna: {task.logfc_cutoff_circrna}")
-        self.stdout.write(f"padj_cutoff_circrna: {task.padj_cutoff_circrna}")
+        self.stdout.write(
+            f"logfc_cutoff_circrna: {task.logfc_cutoff_circrna}"
+        )
+        self.stdout.write(
+            f"padj_cutoff_circrna: {task.padj_cutoff_circrna}"
+        )
 
-        self.stdout.write(f"workspace: {task.get_workspace_dir_absolute_path()}")
-        self.stdout.write(f"input_dir: {task.get_input_dir_absolute_path()}")
-        self.stdout.write(f"output_dir: {task.get_output_dir_absolute_path()}")
+        self.stdout.write(f"create_time: {task.create_time}")
+        self.stdout.write(f"finish_time: {task.finish_time}")
+
+        self.stdout.write(
+            f"workspace: {task.get_workspace_dir_absolute_path()}"
+        )
+        self.stdout.write(
+            f"input_dir: {task.get_input_dir_absolute_path()}"
+        )
+        self.stdout.write(
+            f"output_dir: {task.get_output_dir_absolute_path()}"
+        )

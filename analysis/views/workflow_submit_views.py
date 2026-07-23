@@ -6,15 +6,19 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
-from analysis.slurm_sbtch import sbatch_custom_list_query_task, sbatch_paired_cohort_task, sbatch_hybrid_reference_task
+from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask, SCSTHybridReferenceTask
+from analysis.slurm_sbtch import sbatch_custom_list_query_task, sbatch_paired_cohort_task, sbatch_hybrid_reference_task, \
+    sbatch_scst_hybrid_reference_task
 from analysis.utils.custom_list_query_task_utils import CustomListQueryTaskInputError, \
     prepare_custom_list_query_workspace, CustomListQueryPathError, validate_cancer_type, normalize_rnas, \
     parse_boolean_value
 from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_task_params, \
     HybridReferenceTaskInputError, HybridReferenceTaskPathError, HYBRID_REFERENCE_ALLOWED_FILE_FIELDS, \
     prepare_hybrid_reference_workspace, save_hybrid_reference_uploaded_input_files, \
-    validate_hybrid_reference_file_contents
+    validate_hybrid_reference_file_contents, validate_scst_hybrid_reference_task_params, \
+    SCST_HYBRID_REFERENCE_ALLOWED_FILE_FIELDS, prepare_scst_hybrid_reference_workspace, \
+    save_scst_hybrid_reference_uploaded_input_files, validate_scst_hybrid_reference_file_contents, \
+    SCSTHybridReferenceTaskInputError, SCSTHybridReferenceTaskPathError, validate_scst_uploaded_file_extensions
 from analysis.utils.immune_annotation_path_utils import (
     ImmuneAnnotationPathError,
     validate_immune_annotation_file,
@@ -882,4 +886,335 @@ class HybridReferenceTaskSubmitView(APIView):
         raise ValueError(
             f"Invalid boolean field: {field_name}. "
             "Allowed values are true or false."
+        )
+
+
+class SCSTHybridReferenceTaskSubmitView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        task = None
+
+        try:
+            task_name = self.get_string_field(
+                request,
+                "task_name",
+            )
+            data_type = self.get_string_field(
+                request,
+                "data_type",
+            )
+            tcga_type = self.get_string_field(
+                request,
+                "tcga_type",
+            )
+            lncrna_type = self.get_string_field(
+                request,
+                "lncrna_type",
+            )
+            group_col = self.get_string_field(
+                request,
+                "group_col",
+            )
+            map_info = self.get_string_field(
+                request,
+                "map_info",
+            )
+
+            use_padj = self.parse_bool_field(
+                request,
+                "use_padj",
+            )
+
+            logfc_cutoff_mrna = self.parse_float_field(
+                request,
+                "logfc_cutoff_mrna",
+            )
+            padj_cutoff_mrna = self.parse_float_field(
+                request,
+                "padj_cutoff_mrna",
+            )
+
+            validate_scst_hybrid_reference_task_params(
+                task_name=task_name,
+                data_type=data_type,
+                tcga_type=tcga_type,
+                lncrna_type=lncrna_type,
+                group_col=group_col,
+                use_padj=use_padj,
+                logfc_cutoff_mrna=logfc_cutoff_mrna,
+                padj_cutoff_mrna=padj_cutoff_mrna,
+            )
+
+            try:
+                validate_immune_annotation_file(map_info)
+            except ImmuneAnnotationPathError as exc:
+                return self.error_response(
+                    str(exc),
+                    status.HTTP_400_BAD_REQUEST,
+                )
+            except FileNotFoundError as exc:
+                return self.error_response(
+                    str(exc),
+                    status.HTTP_404_NOT_FOUND,
+                )
+
+            missing_files = [
+                field_name
+                for field_name
+                in SCST_HYBRID_REFERENCE_ALLOWED_FILE_FIELDS
+                if field_name not in request.FILES
+            ]
+
+            if missing_files:
+                return self.error_response(
+                    "Missing uploaded file(s): "
+                    f"{', '.join(missing_files)}.",
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                validate_scst_uploaded_file_extensions(
+                    request.FILES
+                )
+            except SCSTHybridReferenceTaskInputError as exc:
+                return self.error_response(
+                    str(exc),
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+            task = SCSTHybridReferenceTask.objects.create(
+                user=str(
+                    request.data.get("user", "")
+                ).strip(),
+                task_name=task_name,
+                status=SCSTHybridReferenceTask.Status.Pending,
+                data_type=data_type,
+                tcga_type=tcga_type,
+                lncrna_type=lncrna_type,
+                group_col=group_col,
+                map_info=map_info,
+                use_padj=use_padj,
+                logfc_cutoff_mrna=logfc_cutoff_mrna,
+                padj_cutoff_mrna=padj_cutoff_mrna,
+            )
+
+            try:
+                prepare_scst_hybrid_reference_workspace(task)
+
+                saved_files = (
+                    save_scst_hybrid_reference_uploaded_input_files(
+                        task=task,
+                        files=request.FILES,
+                    )
+                )
+
+                validation_result = (
+                    validate_scst_hybrid_reference_file_contents(task)
+                )
+
+                task.exp_file = saved_files["exp_file"]
+                task.meta_file = saved_files["meta_file"]
+
+                task.save(
+                    update_fields=[
+                        "exp_file",
+                        "meta_file",
+                    ]
+                )
+
+            except SCSTHybridReferenceTaskInputError as exc:
+                self.mark_task_failed(task)
+
+                return self.error_response(
+                    str(exc),
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+            except (
+                OSError,
+                FileNotFoundError,
+                SCSTHybridReferenceTaskPathError,
+            ) as exc:
+                self.mark_task_failed(task)
+
+                return self.error_response(
+                    f"Failed to prepare task workspace: {exc}",
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            submit_result = sbatch_scst_hybrid_reference_task(
+                task.uuid
+            )
+
+            if not submit_result.get("success"):
+                self.mark_task_failed(task)
+
+                return self.error_response(
+                    submit_result.get(
+                        "msg",
+                        "Failed to submit SC/ST task.",
+                    ),
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            return Response(
+                {
+                    "success": True,
+                    "msg": "SC/ST Hybrid Reference task "
+                           "submitted successfully.",
+                    "data": {
+                        "uuid": str(task.uuid),
+                        "task_type": "scst_hybrid_reference",
+                        "task_name": task.task_name,
+                        "user": task.user,
+                        "status": task.get_status_display(),
+                        "create_time": timezone.localtime(
+                            task.create_time
+                        ).strftime("%Y-%m-%d %H:%M:%S"),
+                        "data_type": task.data_type,
+                        "id_column": validation_result["id_column"],
+                        "id_storage": validation_result["id_storage"],
+                        "map_info": task.map_info,
+                        "tcga_type": task.tcga_type,
+                        "lncrna_type": task.lncrna_type,
+                        "group_col": task.group_col,
+                        "use_padj": task.use_padj,
+                        "files": {
+                            "exp_file": task.exp_file,
+                            "meta_file": task.meta_file,
+                        },
+                        "cutoffs": {
+                            "mRNA": {
+                                "logfc_cutoff":
+                                    task.logfc_cutoff_mrna,
+                                "pvalue_cutoff":
+                                    task.padj_cutoff_mrna,
+                            },
+                        },
+                    },
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except (
+            ValueError,
+            SCSTHybridReferenceTaskInputError,
+            SCSTHybridReferenceTaskPathError,
+        ) as exc:
+            return self.error_response(
+                str(exc),
+                status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception as exc:
+            if task is not None:
+                self.mark_task_failed(task)
+
+            print(traceback.format_exc())
+
+            return self.error_response(
+                f"Server error: {exc}",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @staticmethod
+    def get_string_field(request, field_name: str) -> str:
+        value = str(
+            request.data.get(field_name, "")
+        ).strip()
+
+        if not value:
+            raise ValueError(
+                f"Missing field: {field_name}."
+            )
+
+        return value
+
+    @staticmethod
+    def parse_float_field(request, field_name: str) -> float:
+        raw_value = request.data.get(field_name)
+
+        if raw_value is None or not str(raw_value).strip():
+            raise ValueError(
+                f"Missing field: {field_name}."
+            )
+
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Invalid numeric field: {field_name}."
+            )
+
+        if field_name.startswith("logfc_cutoff"):
+            if value < 0:
+                raise ValueError(
+                    f"{field_name} must be greater than "
+                    "or equal to 0."
+                )
+
+        if field_name.startswith("padj_cutoff"):
+            if value <= 0 or value > 1:
+                raise ValueError(
+                    f"{field_name} must be in the range (0, 1]."
+                )
+
+        return value
+
+    @staticmethod
+    def parse_bool_field(request, field_name: str) -> bool:
+        raw_value = request.data.get(field_name)
+
+        if raw_value is None or not str(raw_value).strip():
+            raise ValueError(
+                f"Missing field: {field_name}."
+            )
+
+        normalized_value = str(raw_value).strip().lower()
+
+        if normalized_value in {
+            "true",
+            "1",
+            "yes",
+            "y",
+        }:
+            return True
+
+        if normalized_value in {
+            "false",
+            "0",
+            "no",
+            "n",
+        }:
+            return False
+
+        raise ValueError(
+            f"Invalid boolean field: {field_name}. "
+            "Allowed values are true or false."
+        )
+
+    @staticmethod
+    def mark_task_failed(task) -> None:
+        if task is None:
+            return
+
+        task.status = SCSTHybridReferenceTask.Status.Failed
+        task.finish_time = timezone.now()
+
+        task.save(
+            update_fields=[
+                "status",
+                "finish_time",
+            ]
+        )
+
+    @staticmethod
+    def error_response(message: str, http_status: int):
+        return Response(
+            {
+                "success": False,
+                "msg": message,
+            },
+            status=http_status,
         )

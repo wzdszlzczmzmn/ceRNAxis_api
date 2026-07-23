@@ -19,64 +19,108 @@ def format_datetime(value):
     return timezone.localtime(value).strftime("%Y-%m-%d %H:%M:%S")
 
 
+CUSTOM_LIST_QUERY_RNA_TYPES = (
+    "miRNA",
+    "mRNA",
+    "mRNA_up",
+    "mRNA_down",
+    "lncRNA",
+    "circRNA",
+)
+
+
 def normalize_task_rnas_for_response(task) -> dict:
-    if not isinstance(task.rnas, dict):
-        return {
-            "miRNA": [],
-            "mRNA": [],
-            "lncRNA": [],
-            "circRNA": [],
-        }
+    """
+    Normalize the CustomListQueryTask.rnas JSON value.
+
+    New tasks support:
+    - Non-directional mRNA input: mRNA
+    - Directional mRNA input: mRNA_up and mRNA_down
+
+    Missing keys in legacy tasks are returned as empty lists.
+    Invalid non-list values are also normalized to empty lists.
+    """
+    raw_rnas = task.rnas
+
+    if not isinstance(raw_rnas, dict):
+        raw_rnas = {}
 
     return {
-        "miRNA": task.rnas.get("miRNA", [])
-        if isinstance(task.rnas.get("miRNA", []), list)
-        else [],
-        "mRNA": task.rnas.get("mRNA", [])
-        if isinstance(task.rnas.get("mRNA", []), list)
-        else [],
-        "lncRNA": task.rnas.get("lncRNA", [])
-        if isinstance(task.rnas.get("lncRNA", []), list)
-        else [],
-        "circRNA": task.rnas.get("circRNA", [])
-        if isinstance(task.rnas.get("circRNA", []), list)
-        else [],
+        rna_type: (
+            raw_rnas.get(rna_type, [])
+            if isinstance(raw_rnas.get(rna_type, []), list)
+            else []
+        )
+        for rna_type in CUSTOM_LIST_QUERY_RNA_TYPES
     }
 
 
 def format_custom_list_query_task(task, position=0) -> dict:
     rnas = normalize_task_rnas_for_response(task)
 
+    miRNA_count = len(rnas["miRNA"])
+    mRNA_count = len(rnas["mRNA"])
+    mRNA_up_count = len(rnas["mRNA_up"])
+    mRNA_down_count = len(rnas["mRNA_down"])
+    lncRNA_count = len(rnas["lncRNA"])
+    circRNA_count = len(rnas["circRNA"])
+
+    total_rna_count = (
+        miRNA_count
+        + mRNA_count
+        + mRNA_up_count
+        + mRNA_down_count
+        + lncRNA_count
+        + circRNA_count
+    )
+
+    has_mrna_direction = bool(
+        getattr(task, "has_mrna_direction", False)
+    )
+
     return {
         "uuid": str(task.uuid),
         "status": task.status,
+        "status_label": task.get_status_display(),
         "position": position,
 
         "task_name": task.task_name,
-        "user": getattr(task, "user", ""),
+        "user": getattr(task, "user", "") or "",
 
-        # Deprecated for CustomListQueryTask, retained for backward compatibility.
-        "map_info": getattr(task, "map_info", ""),
+        # Deprecated for CustomListQueryTask, retained for compatibility.
+        "map_info": getattr(task, "map_info", "") or "",
 
         # New Module 1 fields.
-        "cancer_type": getattr(task, "cancer_type", ""),
-        "has_mrna_direction": getattr(task, "has_mrna_direction", False),
+        "cancer_type": getattr(task, "cancer_type", "") or "",
+        "has_mrna_direction": has_mrna_direction,
+
+        # Explicitly describes which mRNA fields the task uses.
+        "mrna_input_mode": (
+            "directional"
+            if has_mrna_direction
+            else "standard"
+        ),
 
         "create_time": format_datetime(task.create_time),
         "finish_time": format_datetime(task.finish_time),
 
-        "miRNA_count": task.miRNA_count,
-        "mRNA_count": task.mRNA_count,
-        "lncRNA_count": task.lncRNA_count,
-        "circRNA_count": task.circRNA_count,
-        "total_rna_count": task.total_rna_count,
+        # Retained top-level count fields for backward compatibility.
+        "miRNA_count": miRNA_count,
+        "mRNA_count": mRNA_count,
+        "mRNA_up_count": mRNA_up_count,
+        "mRNA_down_count": mRNA_down_count,
+        "lncRNA_count": lncRNA_count,
+        "circRNA_count": circRNA_count,
+        "total_rna_count": total_rna_count,
 
         "rna_counts": {
-            "miRNA": task.miRNA_count,
-            "mRNA": task.mRNA_count,
-            "lncRNA": task.lncRNA_count,
-            "circRNA": task.circRNA_count,
-            "total": task.total_rna_count,
+            "miRNA": miRNA_count,
+            "mRNA": mRNA_count,
+            "mRNA_up": mRNA_up_count,
+            "mRNA_down": mRNA_down_count,
+            "lncRNA": lncRNA_count,
+            "circRNA": circRNA_count,
+            "total": total_rna_count,
         },
 
         "rnas": rnas,

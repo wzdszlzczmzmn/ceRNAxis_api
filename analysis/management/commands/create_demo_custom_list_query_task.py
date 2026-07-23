@@ -7,69 +7,20 @@ from django.utils import timezone
 from analysis.models import CustomListQueryTask
 
 
-DEMO_UUID = "35fb8c89-a674-469f-a670-ea4bebd312ab"
+DEMO_UUID = "9720aebe-3be4-4262-bd57-cb02d09ce42f"
 DEMO_TASK_NAME = "demo_task"
 DEMO_STATUS = CustomListQueryTask.Status.Success
 
-# 新版 Module 1 使用 cancer_type；map_info 对 CustomListQueryTask 已废弃，当前 demo 为空字符串。
+DEMO_USER = ""
 DEMO_MAP_INFO = ""
 DEMO_CANCER_TYPE = "ACC"
-DEMO_HAS_MRNA_DIRECTION = False
+DEMO_HAS_MRNA_DIRECTION = True
 
-DEMO_CREATE_TIME = "2026-06-29 18:22:53"
-DEMO_FINISH_TIME = "2026-06-29 18:32:00"
+DEMO_CREATE_TIME = "2026-07-13T07:06:01.475Z"
+DEMO_FINISH_TIME = "2026-07-13T08:27:27Z"
 
 
 DEMO_RNAS = {
-    "mRNA": [
-        "LRRC24",
-        "CTSC",
-        "UBE2K",
-        "NDUFB1",
-        "PCTP",
-        "TLCD5",
-        "FHL3",
-        "GALNT16",
-        "IGF2R",
-        "VILL",
-        "CDT1",
-        "NRARP",
-        "APMAP",
-        "ZNF532",
-        "SYNM",
-        "SMG7",
-        "KDM8",
-        "TNP2",
-        "ST3GAL4",
-        "ZNF544",
-        "ACSL6",
-        "RRP1B",
-        "STX4",
-        "HPX",
-        "C2CD2L",
-        "OSCP1",
-        "PAFAH1B3",
-        "GALNS",
-        "SPDYE14",
-        "HLA-DRA",
-        "HLA-DPA1",
-        "HLA-DQB1",
-        "CD74",
-        "IFNG",
-        "HLA-DRB5",
-        "HLA-DPB1",
-        "HLA-DQA1",
-        "HLA-DMA",
-        "HLA-DRB1",
-        "KLRC1",
-        "HLA-DQA2",
-        "CTSS",
-        "KLRD1",
-        "HLA-DOA",
-        "CIITA",
-        "CD8B",
-        "KIR2DL4",
-    ],
     "miRNA": [
         "hsa-mir-567",
         "hsa-miR-6742-5p",
@@ -101,6 +52,97 @@ DEMO_RNAS = {
         "hsa-miR-1299",
         "hsa-mir-320a",
         "hsa-mir-421",
+    ],
+    "mRNA": [],
+    "mRNA_up": [
+        "LRRC24",
+        "CTSC",
+        "UBE2K",
+        "NDUFB1",
+        "PCTP",
+        "TLCD5",
+        "FHL3",
+        "GALNT16",
+        "IGF2R",
+        "VILL",
+        "CDT1",
+        "NRARP",
+        "APMAP",
+        "ZNF532",
+        "SYNM",
+        "SMG7",
+        "KDM8",
+        "HLA-DMA",
+        "TNP2",
+        "ST3GAL4",
+        "CD8A",
+        "HLA-DRA",
+        "HLA-DPA1",
+        "HLA-DQB1",
+        "CD74",
+        "IFNG",
+        "HLA-DRB5",
+        "HLA-DPB1",
+        "HLA-DQA1",
+        "HLA-DRB1",
+        "KLRC1",
+        "HLA-DQA2",
+        "CTSS",
+        "KLRD1",
+        "HLA-DOA",
+        "CIITA",
+        "CD8B",
+        "KIR2DL4",
+        "KLRC3",
+        "CD1B",
+        "HLA-DMB",
+        "CTSB",
+        "CD209",
+        "CD4",
+        "HLA-B",
+        "MICB",
+        "HLA-C",
+        "B2M",
+    ],
+    "mRNA_down": [
+        "ZNF544",
+        "ACSL6",
+        "RRP1B",
+        "STX4",
+        "HPX",
+        "C2CD2L",
+        "OSCP1",
+        "PAFAH1B3",
+        "GALNS",
+        "SPDYE14",
+        "SH2D1A",
+        "IFNG",
+        "GZMB",
+        "LCP2",
+        "PTPN6",
+        "PIK3CD",
+        "ITGB2",
+        "LCK",
+        "FASLG",
+        "KLRD1",
+        "PRF1",
+        "HLA-E",
+        "CD247",
+        "CD48",
+        "CD244",
+        "KIR2DL4",
+        "KLRC3",
+        "IFNB1",
+        "KLRC1",
+        "MICB",
+        "SH2D1B",
+        "FCER1G",
+        "HCST",
+        "HLA-B",
+        "HLA-C",
+        "HLA-A",
+        "TYROBP",
+        "KLRC2",
     ],
     "lncRNA": [
         "NONHSAG043011",
@@ -138,38 +180,56 @@ DEMO_RNAS = {
 }
 
 
-def make_aware_datetime(datetime_string: str):
-    naive_dt = datetime.strptime(datetime_string, "%Y-%m-%d %H:%M:%S")
+def parse_datetime(datetime_string: str):
+    """
+    解析以下格式：
 
-    if timezone.is_aware(naive_dt):
-        return naive_dt
+    2026-07-13T07:06:01.475Z
+    2026-07-13T07:06:01Z
+    2026-07-13T07:06:01+00:00
+    2026-07-13 07:06:01
+    """
+    normalized_value = datetime_string.strip()
 
-    return timezone.make_aware(
-        naive_dt,
-        timezone.get_current_timezone(),
-    )
+    if normalized_value.endswith("Z"):
+        normalized_value = f"{normalized_value[:-1]}+00:00"
+
+    try:
+        parsed_datetime = datetime.fromisoformat(normalized_value)
+    except ValueError as exc:
+        raise CommandError(
+            f"Invalid datetime value: {datetime_string}"
+        ) from exc
+
+    if timezone.is_naive(parsed_datetime):
+        parsed_datetime = timezone.make_aware(
+            parsed_datetime,
+            timezone.get_current_timezone(),
+        )
+
+    return parsed_datetime
 
 
 class Command(BaseCommand):
-    help = "Create or update a demo CustomListQueryTask record for development."
+    help = "Create or update a demo CustomListQueryTask record."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--uuid",
             default=DEMO_UUID,
-            help="UUID for the demo task.",
+            help="UUID for the task.",
         )
 
         parser.add_argument(
             "--task-name",
             default=DEMO_TASK_NAME,
-            help="Task name for the demo task.",
+            help="Task name.",
         )
 
         parser.add_argument(
             "--user",
-            default="",
-            help="Optional user field.",
+            default=DEMO_USER,
+            help="Optional user value.",
         )
 
         parser.add_argument(
@@ -181,65 +241,74 @@ class Command(BaseCommand):
                 CustomListQueryTask.Status.Running,
             ],
             default=DEMO_STATUS,
-            help="Task status. Default is Success.",
+            help="Task status.",
         )
 
         parser.add_argument(
             "--map-info",
             default=DEMO_MAP_INFO,
-            help="Deprecated immune annotation map_info value.",
+            help="Deprecated map_info value.",
         )
 
         parser.add_argument(
             "--cancer-type",
             default=DEMO_CANCER_TYPE,
-            help="Cancer type used by run_module1.sh, e.g. ACC.",
+            help="Cancer type, for example ACC.",
         )
 
         parser.add_argument(
             "--has-mrna-direction",
             dest="has_mrna_direction",
             action="store_true",
-            help="Whether mRNA input is directional.",
+            help="Use directional mRNA input.",
         )
 
         parser.add_argument(
             "--no-has-mrna-direction",
             dest="has_mrna_direction",
             action="store_false",
-            help="Whether mRNA input is not directional.",
+            help="Use standard non-directional mRNA input.",
         )
 
-        parser.set_defaults(has_mrna_direction=DEMO_HAS_MRNA_DIRECTION)
+        parser.set_defaults(
+            has_mrna_direction=DEMO_HAS_MRNA_DIRECTION,
+        )
 
         parser.add_argument(
             "--create-time",
             default=DEMO_CREATE_TIME,
-            help="Create time, format: YYYY-MM-DD HH:MM:SS.",
+            help="Task creation time.",
         )
 
         parser.add_argument(
             "--finish-time",
             default=DEMO_FINISH_TIME,
-            help="Finish time, format: YYYY-MM-DD HH:MM:SS.",
+            help="Task finish time.",
         )
 
     def handle(self, *args, **options):
         try:
             task_uuid = uuid_lib.UUID(options["uuid"])
-        except ValueError as e:
-            raise CommandError(f"Invalid UUID: {options['uuid']}") from e
+        except ValueError as exc:
+            raise CommandError(
+                f"Invalid UUID: {options['uuid']}"
+            ) from exc
 
         task_status = options["status"]
-        create_time = make_aware_datetime(options["create_time"])
+        create_time = parse_datetime(options["create_time"])
 
         if task_status in {
             CustomListQueryTask.Status.Success,
             CustomListQueryTask.Status.Failed,
         }:
-            finish_time = make_aware_datetime(options["finish_time"])
+            finish_time = parse_datetime(options["finish_time"])
         else:
             finish_time = None
+
+        self.validate_rnas(
+            rnas=DEMO_RNAS,
+            has_mrna_direction=options["has_mrna_direction"],
+        )
 
         task, created = CustomListQueryTask.objects.update_or_create(
             uuid=task_uuid,
@@ -255,7 +324,11 @@ class Command(BaseCommand):
             },
         )
 
-        CustomListQueryTask.objects.filter(uuid=task_uuid).update(
+        # create_time 使用 auto_now_add，不能通过 update_or_create defaults 覆盖，
+        # 因此在记录创建或更新后单独执行 update。
+        CustomListQueryTask.objects.filter(
+            uuid=task_uuid,
+        ).update(
             create_time=create_time,
         )
 
@@ -265,24 +338,73 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Demo CustomListQueryTask {action}: {task.uuid}"
+                f"CustomListQueryTask {action}: {task.uuid}"
             )
         )
+
         self.stdout.write(f"task_name: {task.task_name}")
         self.stdout.write(f"user: {task.user}")
-        self.stdout.write(f"status: {task.status} ({task.get_status_display()})")
+        self.stdout.write(
+            f"status: {task.status} ({task.get_status_display()})"
+        )
         self.stdout.write(f"create_time: {task.create_time}")
         self.stdout.write(f"finish_time: {task.finish_time}")
         self.stdout.write(f"map_info: {task.map_info}")
         self.stdout.write(f"cancer_type: {task.cancer_type}")
-        self.stdout.write(f"has_mrna_direction: {task.has_mrna_direction}")
+        self.stdout.write(
+            f"has_mrna_direction: {task.has_mrna_direction}"
+        )
 
         self.stdout.write(f"miRNA_count: {task.miRNA_count}")
         self.stdout.write(f"mRNA_count: {task.mRNA_count}")
+        self.stdout.write(f"mRNA_up_count: {task.mRNA_up_count}")
+        self.stdout.write(f"mRNA_down_count: {task.mRNA_down_count}")
         self.stdout.write(f"lncRNA_count: {task.lncRNA_count}")
         self.stdout.write(f"circRNA_count: {task.circRNA_count}")
         self.stdout.write(f"total_rna_count: {task.total_rna_count}")
 
-        self.stdout.write(f"workspace: {task.get_workspace_dir_absolute_path()}")
-        self.stdout.write(f"input_dir: {task.get_input_dir_absolute_path()}")
-        self.stdout.write(f"output_dir: {task.get_output_dir_absolute_path()}")
+        self.stdout.write(
+            f"workspace: {task.get_workspace_dir_absolute_path()}"
+        )
+        self.stdout.write(
+            f"input_dir: {task.get_input_dir_absolute_path()}"
+        )
+        self.stdout.write(
+            f"output_dir: {task.get_output_dir_absolute_path()}"
+        )
+
+    @staticmethod
+    def validate_rnas(rnas: dict, has_mrna_direction: bool):
+        required_keys = {
+            "miRNA",
+            "mRNA",
+            "mRNA_up",
+            "mRNA_down",
+            "lncRNA",
+            "circRNA",
+        }
+
+        missing_keys = required_keys - set(rnas)
+
+        if missing_keys:
+            raise CommandError(
+                f"Missing RNA keys: {sorted(missing_keys)}"
+            )
+
+        for rna_type in required_keys:
+            if not isinstance(rnas[rna_type], list):
+                raise CommandError(
+                    f"RNA value must be a list: {rna_type}"
+                )
+
+        if has_mrna_direction:
+            if rnas["mRNA"]:
+                raise CommandError(
+                    "mRNA must be empty when has_mrna_direction is true."
+                )
+        else:
+            if rnas["mRNA_up"] or rnas["mRNA_down"]:
+                raise CommandError(
+                    "mRNA_up and mRNA_down must be empty when "
+                    "has_mrna_direction is false."
+                )

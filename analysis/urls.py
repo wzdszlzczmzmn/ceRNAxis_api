@@ -4,17 +4,29 @@ from analysis.views import workflow_views, workflow_submit_views, workflow_query
     workflow_demo_view
 from analysis.views.workflow_detail_each_views import workflow_uploaded_file_views, workflow_network_views, \
     workflow_axis_final_views, workflow_cmap_views, workflow_log2fc_correlation_views, workflow_deg_volcano_views, \
-    workflow_exp_correlation_views, workflow_survival_views, workflow_deg_pathway_views
+    workflow_exp_correlation_views, workflow_survival_views, workflow_deg_pathway_views, workflow_enrichr_views, \
+    workflow_cm_score_views, workflow_sponge_views
 
 urlpatterns = [
+    # Immune Annotation Views
     path('immune_annotations/', workflow_views.WorkflowImmuneAnnotationListView.as_view(),
          name='workflow_immune_annotations'),
     path('immune_annotation/', workflow_views.WorkflowImmuneAnnotationDetailView.as_view(),
          name='workflow_immune_annotation_detail'),
     path('immune_annotation_download/', workflow_views.WorkflowImmuneAnnotationDownloadView.as_view(),
          name='workflow_immune_annotation_download'),
+
+    # Task Submit Views
     path('custom_list_query_task_submit/', workflow_submit_views.CustomListQueryTaskSubmitView.as_view(),
          name='custom_list_query_task_submit'),
+    path('paired_cohort_task_submit/', workflow_submit_views.PairedCohortTaskSubmitView.as_view(),
+         name='paired_cohort_task_submit'),
+    path('hybrid_reference_task_submit/', workflow_submit_views.HybridReferenceTaskSubmitView.as_view(),
+         name='hybrid_reference_task_submit'),
+    path('scst_hybrid_reference_task_submit/', workflow_submit_views.SCSTHybridReferenceTaskSubmitView.as_view(),
+         name='scst_hybrid_reference_task_submit'),
+
+    # Task Query Views
     path('query_task/', workflow_query_views.QueryTaskView.as_view(), name='query_task'),
 
     # Task Network Views
@@ -24,9 +36,6 @@ urlpatterns = [
          name='paired_cohort_task_network'),
     path('hybrid_reference_task_network/', workflow_network_views.HybridReferenceTaskNetworkView.as_view(),
          name='hybrid_reference_task_network'),
-
-    path('paired_cohort_task_submit/', workflow_submit_views.PairedCohortTaskSubmitView.as_view(),
-         name='paired_cohort_task_submit'),
 
     # Uploaded File Download Views
     path('paired_cohort_uploaded_file_download/',
@@ -113,9 +122,6 @@ urlpatterns = [
     path('hybrid_reference_survival_km/', workflow_survival_views.HybridReferenceSurvivalKMDataView.as_view(),
          name='hybrid_reference_survival_km'),
 
-    path('hybrid_reference_task_submit/', workflow_submit_views.HybridReferenceTaskSubmitView.as_view(),
-         name='hybrid_reference_task_submit'),
-
     # DEG Pathway Views
     path('paired_cohort_deg_pathway/', workflow_deg_pathway_views.PairedCohortDEGPathwayView.as_view(),
          name='paired_cohort_deg_pathway'),
@@ -123,8 +129,26 @@ urlpatterns = [
          name='hybrid_reference_deg_pathway'),
 
     # CMap Views
+    path('custom_list_query_cmap_result/', workflow_cmap_views.CustomListQueryCMapResultView.as_view(),
+         name='custom_list_query_cmap_result'),
     path('paired_cohort_cmap_result/', workflow_cmap_views.PairedCohortCMapResultView.as_view(),
          name='paired_cohort_cmap_result'),
     path('hybrid_reference_cmap_result/', workflow_cmap_views.HybridReferenceCMapResultView.as_view(),
          name='hybrid_reference_cmap_result'),
+
+    # Enrichr Views
+    path('custom_list_query_enrichr_result/', workflow_enrichr_views.CustomListQueryEnrichrResultView.as_view(),
+         name='custom_list_query_enrichr_result'),
+
+    # CM-score Views
+    path('workflow_cm_score_options/', workflow_cm_score_views.WorkflowCMScoreOptionsView.as_view(),
+         name='workflow_cm_score_options'),
+    path("workflow_cm_score_result/", workflow_cm_score_views.WorkflowCMScoreResultView.as_view(),
+         name="workflow_cm_score_result"),
+
+    # Sponge Results Views
+    path('paired_cohort_sponge_result/', workflow_sponge_views.PairedCohortSpongeDataView.as_view(),
+         name='paired_cohort_sponge_result'),
+    path('hybrid_reference_sponge_result/', workflow_sponge_views.HybridReferenceSpongeDataView.as_view(),
+         name='hybrid_reference_sponge_result'),
 ]

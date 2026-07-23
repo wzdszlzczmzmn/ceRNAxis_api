@@ -74,7 +74,7 @@ class CustomListQueryTaskNetworkView(APIView):
                 task_label="CustomListQueryTask",
             )
 
-            input_items = self.parse_task_rnas(task.rnas)
+            input_items = self.parse_task_rnas(task)
 
             if not input_items:
                 result = self.empty_network_response(task)
@@ -132,36 +132,58 @@ class CustomListQueryTaskNetworkView(APIView):
             "ignored_nodes": [],
         }
 
-    def parse_task_rnas(self, rnas):
+    def parse_task_rnas(self, task):
         """
-        将 task.rnas 转成：
-        [
-            {"name": "MALAT1", "type": "lncRNA"},
-            ...
-        ]
+        将 CustomListQueryTask.rnas 转换为网络查询参数。
+
+        非方向性任务：
+            rnas["mRNA"] 作为 mRNA 查询。
+
+        方向性任务：
+            rnas["mRNA_up"] 和 rnas["mRNA_down"] 合并后，
+            统一作为 mRNA 查询。
+
+        返回格式：
+            [
+                {"name": "MALAT1", "type": "lncRNA"},
+                {"name": "CD274", "type": "mRNA"},
+                ...
+            ]
+
+        注意：
+            RNANode.rna_type 中只有 mRNA，不存在 mRNA_up 和
+            mRNA_down，因此方向信息只用于选择输入列表，
+            查询数据库时仍统一使用 mRNA 类型。
         """
+        rnas = task.rnas
+
         if not isinstance(rnas, dict):
             return []
+
+        has_mrna_direction = bool(
+            getattr(task, "has_mrna_direction", False)
+        )
 
         items = []
         seen = set()
 
-        for rna_type in self.ALLOWED_RNA_TYPES:
-            names = rnas.get(rna_type, [])
-
+        def append_items(names, query_rna_type):
             if not isinstance(names, list):
-                continue
+                return
 
             for name in names:
                 if not isinstance(name, str):
                     continue
 
-                name = name.strip()
+                normalized_name = name.strip()
 
-                if not name:
+                if not normalized_name:
                     continue
 
-                key = (name, rna_type)
+                key = (
+                    normalized_name,
+                    query_rna_type,
+                )
 
                 if key in seen:
                     continue
@@ -170,10 +192,43 @@ class CustomListQueryTaskNetworkView(APIView):
 
                 items.append(
                     {
-                        "name": name,
-                        "type": rna_type,
+                        "name": normalized_name,
+                        "type": query_rna_type,
                     }
                 )
+
+        # 普通 RNA 类型。
+        append_items(
+            names=rnas.get("miRNA", []),
+            query_rna_type="miRNA",
+        )
+
+        if has_mrna_direction:
+            # 方向性任务不使用普通 mRNA 列表。
+            # mRNA_up 和 mRNA_down 均以 mRNA 类型查询 RNANode。
+            append_items(
+                names=rnas.get("mRNA_up", []),
+                query_rna_type="mRNA",
+            )
+            append_items(
+                names=rnas.get("mRNA_down", []),
+                query_rna_type="mRNA",
+            )
+        else:
+            append_items(
+                names=rnas.get("mRNA", []),
+                query_rna_type="mRNA",
+            )
+
+        append_items(
+            names=rnas.get("lncRNA", []),
+            query_rna_type="lncRNA",
+        )
+
+        append_items(
+            names=rnas.get("circRNA", []),
+            query_rna_type="circRNA",
+        )
 
         return items
 

@@ -1,7 +1,11 @@
+from collections import Counter
 from pathlib import Path
 import csv
+import json
 
 import pandas as pd
+import pyarrow.parquet as pq
+from pyarrow.lib import ArrowInvalid
 
 from analysis.utils.paired_cohort_task_utils import (
     validate_safe_name,
@@ -95,11 +99,45 @@ HYBRID_REFERENCE_MRNA_GSEA_FILENAME_SUFFIX = "_mRNA_gsea.csv"
 HYBRID_REFERENCE_MRNA_GSEA_REQUIRED_COLUMNS = DEG_PATHWAY_REQUIRED_COLUMNS
 
 
+SCST_HYBRID_REFERENCE_ALLOWED_FILE_FIELDS = [
+    "exp_file",
+    "meta_file",
+]
+
+SCST_HYBRID_REFERENCE_INPUT_FILENAME_MAP = {
+    "exp_file": "expression.parquet",
+    "meta_file": "meta.csv",
+}
+
+SCST_HYBRID_REFERENCE_ALLOWED_FILE_SUFFIXES = {
+    "exp_file": {".parquet"},
+    "meta_file": {".csv"},
+}
+
+SCST_HYBRID_REFERENCE_VALID_DATA_TYPES = [
+    "sc",
+    "st",
+]
+
+SCST_HYBRID_REFERENCE_ID_COLUMN_MAP = {
+    "sc": "cell_id",
+    "st": "spot_id",
+}
+
+
 class HybridReferenceTaskInputError(ValueError):
     pass
 
 
 class HybridReferenceTaskPathError(ValueError):
+    pass
+
+
+class SCSTHybridReferenceTaskInputError(HybridReferenceTaskInputError):
+    pass
+
+
+class SCSTHybridReferenceTaskPathError(HybridReferenceTaskPathError):
     pass
 
 
@@ -541,3 +579,622 @@ def build_hybrid_reference_deg_pathway_data(
         )
     except DEGPathwayInputError as e:
         raise HybridReferenceTaskInputError(str(e))
+
+
+def get_scst_hybrid_reference_task_input_dir(task) -> Path:
+    return Path(task.get_input_dir_absolute_path()).resolve()
+
+
+def get_scst_hybrid_reference_task_output_dir(task) -> Path:
+    return Path(task.get_output_dir_absolute_path()).resolve()
+
+
+def get_scst_hybrid_reference_input_file_path(
+    task,
+    field_name: str,
+) -> Path:
+    if field_name not in SCST_HYBRID_REFERENCE_INPUT_FILENAME_MAP:
+        raise SCSTHybridReferenceTaskPathError(
+            f"Invalid SC/ST input file field: {field_name}."
+        )
+
+    input_dir = get_scst_hybrid_reference_task_input_dir(task)
+
+    file_path = (
+        input_dir / SCST_HYBRID_REFERENCE_INPUT_FILENAME_MAP[field_name]
+    ).resolve()
+
+    if file_path.parent != input_dir:
+        raise SCSTHybridReferenceTaskPathError(
+            "Invalid SC/ST Hybrid Reference input file path."
+        )
+
+    return file_path
+
+
+def prepare_scst_hybrid_reference_workspace(task) -> dict:
+    input_dir = get_scst_hybrid_reference_task_input_dir(task)
+    output_dir = get_scst_hybrid_reference_task_output_dir(task)
+
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    return {
+        "input_dir": input_dir,
+        "output_dir": output_dir,
+    }
+
+
+def save_scst_hybrid_reference_uploaded_input_files(
+    task,
+    files,
+) -> dict:
+    input_dir = get_scst_hybrid_reference_task_input_dir(task)
+    input_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_files = {}
+
+    for field_name in SCST_HYBRID_REFERENCE_ALLOWED_FILE_FIELDS:
+        uploaded_file = files.get(field_name)
+
+        if uploaded_file is None:
+            raise SCSTHybridReferenceTaskInputError(
+                f"Missing uploaded file: {field_name}."
+            )
+
+        file_path = get_scst_hybrid_reference_input_file_path(
+            task=task,
+            field_name=field_name,
+        )
+
+        with file_path.open("wb+") as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+
+        saved_files[field_name] = file_path.name
+
+    return saved_files
+
+
+def validate_scst_hybrid_reference_input_files(task) -> dict:
+    validated_files = {}
+
+    for field_name in SCST_HYBRID_REFERENCE_ALLOWED_FILE_FIELDS:
+        file_path = get_scst_hybrid_reference_input_file_path(
+            task=task,
+            field_name=field_name,
+        )
+
+        if not file_path.exists() or not file_path.is_file():
+            raise FileNotFoundError(
+                f"SC/ST Hybrid Reference input file not found: "
+                f"{file_path.name}"
+            )
+
+        validated_files[field_name] = file_path
+
+    return validated_files
+
+
+def read_parquet_columns(file_path: Path) -> list[str]:
+    try:
+        parquet_file = pq.ParquetFile(file_path)
+        columns = parquet_file.schema_arrow.names
+
+    except (
+        ArrowInvalid,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Invalid Parquet file: {file_path.name}. {exc}"
+        )
+
+    if not columns:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Parquet file has no columns: {file_path.name}."
+        )
+
+    return [
+        str(column).strip()
+        for column in columns
+    ]
+
+
+def get_parquet_pandas_index_columns(
+    parquet_file: pq.ParquetFile,
+) -> list[str]:
+    """
+    从 Parquet 的 pandas metadata 中提取命名索引字段。
+
+    例如：
+        dataframe.index.name = "cell_id"
+        dataframe.to_parquet(..., index=True)
+
+    此时 pandas metadata 的 index_columns 通常为：
+        ["cell_id"]
+
+    RangeIndex 可能以 dict 形式记录，此处不会将其视为命名 ID 索引。
+    """
+    schema_metadata = parquet_file.schema_arrow.metadata or {}
+    raw_pandas_metadata = schema_metadata.get(b"pandas")
+
+    if not raw_pandas_metadata:
+        return []
+
+    try:
+        pandas_metadata = json.loads(
+            raw_pandas_metadata.decode("utf-8")
+        )
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        TypeError,
+    ):
+        return []
+
+    raw_index_columns = pandas_metadata.get(
+        "index_columns",
+        [],
+    )
+
+    return [
+        str(index_column).strip()
+        for index_column in raw_index_columns
+        if isinstance(index_column, str)
+        and str(index_column).strip()
+    ]
+
+
+def validate_scst_expression_parquet_schema(
+    file_path: Path,
+    expected_id_column: str,
+) -> dict:
+    try:
+        parquet_file = pq.ParquetFile(file_path)
+        columns = [
+            str(column).strip()
+            for column in parquet_file.schema_arrow.names
+        ]
+
+    except (
+        ArrowInvalid,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Invalid Parquet file: {file_path.name}. {exc}"
+        )
+
+    if not columns:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Parquet file has no columns: {file_path.name}."
+        )
+
+    column_counts = Counter(columns)
+
+    duplicate_columns = sorted(
+        column
+        for column, count in column_counts.items()
+        if count > 1
+    )
+
+    if duplicate_columns:
+        raise SCSTHybridReferenceTaskInputError(
+            "exp_file contains duplicate column name(s): "
+            f"{', '.join(duplicate_columns[:10])}."
+        )
+
+    pandas_index_columns = get_parquet_pandas_index_columns(
+        parquet_file
+    )
+
+    id_is_first_regular_column = (
+        columns[0] == expected_id_column
+    )
+
+    id_is_pandas_index = (
+        expected_id_column in pandas_index_columns
+    )
+
+    id_exists_in_physical_schema = (
+        expected_id_column in columns
+    )
+
+    if id_is_first_regular_column:
+        id_storage = "column"
+
+    elif id_is_pandas_index:
+        if not id_exists_in_physical_schema:
+            raise SCSTHybridReferenceTaskInputError(
+                f"exp_file pandas metadata declares "
+                f"'{expected_id_column}' as an index, but the "
+                "corresponding physical Parquet field is missing."
+            )
+
+        id_storage = "pandas_index"
+
+    else:
+        actual_first_column = columns[0]
+
+        raise SCSTHybridReferenceTaskInputError(
+            f"exp_file must store '{expected_id_column}' either "
+            "as the first regular column or as a named Pandas index. "
+            f"The first regular column is '{actual_first_column}', "
+            f"and the declared Pandas index column(s) are "
+            f"{pandas_index_columns or 'none'}."
+        )
+
+    expression_columns = [
+        column
+        for column in columns
+        if column != expected_id_column
+    ]
+
+    if not expression_columns:
+        raise SCSTHybridReferenceTaskInputError(
+            "exp_file must contain at least one gene "
+            "expression column."
+        )
+
+    return {
+        "columns": columns,
+        "expression_columns": expression_columns,
+        "id_column": expected_id_column,
+        "id_storage": id_storage,
+        "pandas_index_columns": pandas_index_columns,
+    }
+
+
+def get_scst_expected_id_column(data_type: str) -> str:
+    try:
+        return SCST_HYBRID_REFERENCE_ID_COLUMN_MAP[data_type]
+    except KeyError:
+        raise SCSTHybridReferenceTaskInputError(
+            "Invalid field: data_type. Allowed values are: sc, st."
+        )
+
+
+def read_scst_parquet_identifier_set(
+    file_path: Path,
+    id_column: str,
+) -> set[str]:
+    try:
+        parquet_file = pq.ParquetFile(file_path)
+    except (
+        ArrowInvalid,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Invalid Parquet file: {file_path.name}. {exc}"
+        )
+
+    physical_columns = set(
+        parquet_file.schema_arrow.names
+    )
+
+    if id_column not in physical_columns:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Unable to read identifier field '{id_column}' "
+            "from exp_file because it is not present in the "
+            "physical Parquet schema."
+        )
+
+    identifiers = set()
+    row_count = 0
+
+    try:
+        for batch in parquet_file.iter_batches(
+            columns=[id_column],
+            batch_size=65536,
+        ):
+            if batch.num_columns != 1:
+                raise SCSTHybridReferenceTaskInputError(
+                    f"Failed to read identifier field "
+                    f"'{id_column}' from exp_file."
+                )
+
+            values = batch.column(0).to_pylist()
+
+            for raw_identifier in values:
+                row_count += 1
+
+                if raw_identifier is None:
+                    raise SCSTHybridReferenceTaskInputError(
+                        f"exp_file contains a null "
+                        f"'{id_column}' value at data row "
+                        f"{row_count}."
+                    )
+
+                identifier = str(raw_identifier).strip()
+
+                if not identifier:
+                    raise SCSTHybridReferenceTaskInputError(
+                        f"exp_file contains an empty "
+                        f"'{id_column}' value at data row "
+                        f"{row_count}."
+                    )
+
+                if identifier in identifiers:
+                    raise SCSTHybridReferenceTaskInputError(
+                        f"exp_file contains duplicate "
+                        f"'{id_column}' value: {identifier}."
+                    )
+
+                identifiers.add(identifier)
+
+    except SCSTHybridReferenceTaskInputError:
+        raise
+
+    except (
+        ArrowInvalid,
+        OSError,
+        ValueError,
+        KeyError,
+    ) as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Failed to read identifier field "
+            f"'{id_column}' from exp_file: {exc}"
+        )
+
+    if row_count == 0:
+        raise SCSTHybridReferenceTaskInputError(
+            "exp_file has no data rows."
+        )
+
+    return identifiers
+
+
+def validate_scst_meta_csv_schema(
+    file_path: Path,
+    expected_id_column: str,
+    group_col: str,
+) -> list[str]:
+    columns = read_csv_header(file_path)
+
+    actual_first_column = columns[0]
+
+    if actual_first_column != expected_id_column:
+        raise SCSTHybridReferenceTaskInputError(
+            "The first column of meta_file must be "
+            f"'{expected_id_column}', but got "
+            f"'{actual_first_column}'."
+        )
+
+    if group_col not in columns:
+        raise SCSTHybridReferenceTaskInputError(
+            f"meta_file is missing group column: "
+            f"'{group_col}'."
+        )
+
+    if group_col == expected_id_column:
+        raise SCSTHybridReferenceTaskInputError(
+            f"group_col cannot be the identifier column "
+            f"'{expected_id_column}'."
+        )
+
+    return columns
+
+
+def read_scst_meta_identifiers(
+    file_path: Path,
+    id_column: str,
+    group_col: str,
+) -> set[str]:
+    identifiers = set()
+    row_count = 0
+
+    try:
+        with file_path.open(
+            "r",
+            newline="",
+            encoding="utf-8-sig",
+        ) as file_obj:
+            reader = csv.DictReader(file_obj)
+
+            if not reader.fieldnames:
+                raise SCSTHybridReferenceTaskInputError(
+                    "meta_file is empty or missing header."
+                )
+
+            reader.fieldnames = [
+                str(column).strip()
+                for column in reader.fieldnames
+            ]
+
+            for row_number, row in enumerate(reader, start=2):
+                row_count += 1
+
+                identifier = str(
+                    row.get(id_column, "")
+                ).strip()
+
+                group_value = str(
+                    row.get(group_col, "")
+                ).strip()
+
+                if not identifier:
+                    raise SCSTHybridReferenceTaskInputError(
+                        f"meta_file contains an empty "
+                        f"'{id_column}' value at row "
+                        f"{row_number}."
+                    )
+
+                if identifier in identifiers:
+                    raise SCSTHybridReferenceTaskInputError(
+                        f"meta_file contains duplicate "
+                        f"'{id_column}' value: "
+                        f"{identifier}."
+                    )
+
+                if not group_value:
+                    raise SCSTHybridReferenceTaskInputError(
+                        f"meta_file contains an empty "
+                        f"'{group_col}' value at row "
+                        f"{row_number}."
+                    )
+
+                identifiers.add(identifier)
+
+    except UnicodeDecodeError:
+        raise SCSTHybridReferenceTaskInputError(
+            f"meta_file must be UTF-8 encoded: "
+            f"{file_path.name}."
+        )
+    except csv.Error as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Invalid CSV file: {file_path.name}. {exc}"
+        )
+
+    if row_count == 0:
+        raise SCSTHybridReferenceTaskInputError(
+            "meta_file has no data rows."
+        )
+
+    return identifiers
+
+
+def validate_scst_hybrid_reference_file_contents(task) -> dict:
+    input_files = validate_scst_hybrid_reference_input_files(task)
+
+    expected_id_column = get_scst_expected_id_column(
+        task.data_type
+    )
+
+    exp_schema = validate_scst_expression_parquet_schema(
+        file_path=input_files["exp_file"],
+        expected_id_column=expected_id_column,
+    )
+
+    meta_columns = validate_scst_meta_csv_schema(
+        file_path=input_files["meta_file"],
+        expected_id_column=expected_id_column,
+        group_col=task.group_col,
+    )
+
+    expression_identifiers = (
+        read_scst_parquet_identifier_set(
+            file_path=input_files["exp_file"],
+            id_column=expected_id_column,
+        )
+    )
+
+    meta_identifiers = read_scst_meta_identifiers(
+        file_path=input_files["meta_file"],
+        id_column=expected_id_column,
+        group_col=task.group_col,
+    )
+
+    missing_in_expression = sorted(
+        meta_identifiers - expression_identifiers
+    )
+
+    missing_in_meta = sorted(
+        expression_identifiers - meta_identifiers
+    )
+
+    if missing_in_expression:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Some '{expected_id_column}' values in "
+            "meta_file are not present in exp_file: "
+            f"{', '.join(missing_in_expression[:10])}."
+        )
+
+    if missing_in_meta:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Some '{expected_id_column}' values in "
+            "exp_file are not present in meta_file: "
+            f"{', '.join(missing_in_meta[:10])}."
+        )
+
+    return {
+        **input_files,
+        "id_column": expected_id_column,
+        "id_storage": exp_schema["id_storage"],
+        "exp_columns": exp_schema["columns"],
+        "expression_columns": (
+            exp_schema["expression_columns"]
+        ),
+        "meta_columns": meta_columns,
+        "sample_count": len(expression_identifiers),
+        "expression_feature_count": len(
+            exp_schema["expression_columns"]
+        ),
+    }
+
+
+def validate_scst_hybrid_reference_task_params(
+    *,
+    task_name: str,
+    data_type: str,
+    tcga_type: str,
+    lncrna_type: str,
+    group_col: str,
+    use_padj: bool,
+    logfc_cutoff_mrna: float,
+    padj_cutoff_mrna: float,
+) -> None:
+    validate_safe_name(task_name, "task_name")
+
+    if data_type not in SCST_HYBRID_REFERENCE_VALID_DATA_TYPES:
+        raise SCSTHybridReferenceTaskInputError(
+            "Invalid field: data_type. Allowed values are: sc, st."
+        )
+
+    if tcga_type not in HYBRID_REFERENCE_VALID_TCGA_TYPES:
+        raise SCSTHybridReferenceTaskInputError(
+            "Invalid field: tcga_type. Allowed values are: "
+            f"{', '.join(HYBRID_REFERENCE_VALID_TCGA_TYPES)}."
+        )
+
+    if lncrna_type not in HYBRID_REFERENCE_VALID_LNCRNA_TYPES:
+        raise SCSTHybridReferenceTaskInputError(
+            "Invalid field: lncrna_type. Allowed values are: "
+            f"{', '.join(HYBRID_REFERENCE_VALID_LNCRNA_TYPES)}."
+        )
+
+    if not group_col:
+        raise SCSTHybridReferenceTaskInputError(
+            "Missing field: group_col."
+        )
+
+    validate_safe_name(group_col, "group_col")
+
+    if not isinstance(use_padj, bool):
+        raise SCSTHybridReferenceTaskInputError(
+            "Invalid field: use_padj. "
+            "Allowed values are true or false."
+        )
+
+    if logfc_cutoff_mrna < 0:
+        raise SCSTHybridReferenceTaskInputError(
+            "logfc_cutoff_mrna must be greater than or equal to 0."
+        )
+
+    if padj_cutoff_mrna <= 0 or padj_cutoff_mrna > 1:
+        raise SCSTHybridReferenceTaskInputError(
+            "padj_cutoff_mrna must be in the range (0, 1]."
+        )
+
+
+def validate_scst_uploaded_file_extensions(files) -> None:
+    for field_name, allowed_suffixes in (
+        SCST_HYBRID_REFERENCE_ALLOWED_FILE_SUFFIXES.items()
+    ):
+        uploaded_file = files.get(field_name)
+
+        if uploaded_file is None:
+            raise SCSTHybridReferenceTaskInputError(
+                f"Missing uploaded file: {field_name}."
+            )
+
+        suffix = Path(uploaded_file.name).suffix.lower()
+
+        if suffix not in allowed_suffixes:
+            allowed_text = ", ".join(sorted(allowed_suffixes))
+
+            raise SCSTHybridReferenceTaskInputError(
+                f"Invalid file type for {field_name}. "
+                f"Allowed file extension(s): {allowed_text}."
+            )

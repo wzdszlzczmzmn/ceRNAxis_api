@@ -6,7 +6,7 @@ from rest_framework import status
 
 from analysis.models import (
     PairedCohortTask,
-    HybridReferenceTask,
+    HybridReferenceTask, CustomListQueryTask,
 )
 
 from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
@@ -22,8 +22,7 @@ from analysis.utils.workflow_detail_utils.workflow_cmap_utils import (
     WorkflowCMapPathError,
     WorkflowCMapInputError,
     read_workflow_cmap_file,
-    normalize_workflow_cmap_dataframe,
-    serialize_workflow_cmap_dataframe, build_cmap_response_from_dataframe,
+    build_cmap_response_from_dataframe,
 )
 
 
@@ -132,6 +131,38 @@ class WorkflowCMapResultBaseView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class CustomListQueryCMapResultView(WorkflowCMapResultBaseView):
+    """
+    Return CMap result table for a successful CustomListQueryTask.
+
+    Query params:
+        taskUUID: CustomListQueryTask UUID
+
+    Expected result file:
+        output/{task_name}_CMap.csv
+    """
+
+    task_model = CustomListQueryTask
+    task_type = "CustomListQueryTask"
+    task_label = "Custom list query task"
+
+    # 当前 Custom List Query CMap 不强制固定列结构。
+    # 后续如果输出列已经稳定，可以定义专用 required columns。
+    required_columns = WORKFLOW_CMAP_REQUIRED_COLUMNS
+
+    def get_extra_response_data(self, task) -> dict:
+        return {
+            # 兼容旧任务。
+            "map_info": getattr(task, "map_info", "") or "",
+
+            # 新版 Module 1 参数。
+            "cancer_type": getattr(task, "cancer_type", "") or "",
+            "has_mrna_direction": bool(
+                getattr(task, "has_mrna_direction", False)
+            ),
+        }
 
 
 class PairedCohortCMapResultView(WorkflowCMapResultBaseView):

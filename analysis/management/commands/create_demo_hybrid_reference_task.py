@@ -1,13 +1,13 @@
 import uuid as uuid_lib
-from datetime import datetime
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from analysis.models import HybridReferenceTask
 
 
-DEMO_UUID = "3198c38c-6a01-412c-b12c-0610ee1a06b0"
+DEMO_UUID = "d3498b29-bd4b-40fd-ba4b-afe8adbc2d1e"
 DEMO_TASK_NAME = "demo_task"
 DEMO_TCGA_TYPE = "TCGA_ACC"
 DEMO_LNCRNA_TYPE = "log2tpm"
@@ -15,8 +15,8 @@ DEMO_USE_PADJ = False
 DEMO_MAP_INFO = "ImmiRImmiR_ACC"
 DEMO_DEG_METHOD = "limma"
 
-DEMO_CREATE_TIME = "2026-06-27 10:27:11"
-DEMO_FINISH_TIME = "2026-06-27 10:41:52"
+DEMO_CREATE_TIME = "2026-07-22T03:20:47.328Z"
+DEMO_FINISH_TIME = "2026-07-22T03:38:27Z"
 
 DEMO_MRNA_FILE = "mrna.csv"
 DEMO_META_FILE = "meta.csv"
@@ -25,20 +25,39 @@ DEMO_LOGFC_CUTOFF_MRNA = 1e-6
 DEMO_PADJ_CUTOFF_MRNA = 0.3
 
 
-def make_aware_datetime(datetime_string: str):
-    naive_dt = datetime.strptime(datetime_string, "%Y-%m-%d %H:%M:%S")
+def parse_task_datetime(datetime_string: str):
+    """
+    Parse an ISO 8601 datetime string and return a timezone-aware datetime.
 
-    if timezone.is_aware(naive_dt):
-        return naive_dt
+    Supported examples:
+        2026-07-22T03:20:47.328Z
+        2026-07-22T03:38:27Z
+        2026-07-22T03:38:27+00:00
+        2026-07-22 12:38:27
+    """
+    parsed_datetime = parse_datetime(datetime_string)
 
-    return timezone.make_aware(
-        naive_dt,
-        timezone.get_current_timezone(),
-    )
+    if parsed_datetime is None:
+        raise CommandError(
+            f"Invalid datetime value: {datetime_string}. "
+            "Use an ISO 8601 datetime such as "
+            "'2026-07-22T03:20:47.328Z'."
+        )
+
+    if timezone.is_naive(parsed_datetime):
+        parsed_datetime = timezone.make_aware(
+            parsed_datetime,
+            timezone.get_current_timezone(),
+        )
+
+    return parsed_datetime
 
 
 class Command(BaseCommand):
-    help = "Create or update a demo HybridReferenceTask record for development."
+    help = (
+        "Create or update a demo HybridReferenceTask record "
+        "for development."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -101,7 +120,10 @@ class Command(BaseCommand):
             "--no-use-padj",
             dest="use_padj",
             action="store_false",
-            help="Use raw P-value threshold instead of adjusted P-value.",
+            help=(
+                "Use raw P-value threshold instead of "
+                "adjusted P-value."
+            ),
         )
 
         parser.set_defaults(use_padj=DEMO_USE_PADJ)
@@ -151,52 +173,74 @@ class Command(BaseCommand):
         parser.add_argument(
             "--create-time",
             default=DEMO_CREATE_TIME,
-            help="Create time, format: YYYY-MM-DD HH:MM:SS.",
+            help=(
+                "Task creation time in ISO 8601 format. "
+                "Example: 2026-07-22T03:20:47.328Z."
+            ),
         )
 
         parser.add_argument(
             "--finish-time",
             default=DEMO_FINISH_TIME,
-            help="Finish time, format: YYYY-MM-DD HH:MM:SS.",
+            help=(
+                "Task finish time in ISO 8601 format. "
+                "Example: 2026-07-22T03:38:27Z."
+            ),
         )
 
     def handle(self, *args, **options):
         try:
             task_uuid = uuid_lib.UUID(options["uuid"])
-        except ValueError as e:
-            raise CommandError(f"Invalid UUID: {options['uuid']}") from e
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise CommandError(
+                f"Invalid UUID: {options['uuid']}"
+            ) from exc
 
         task_status = options["status"]
-        create_time = make_aware_datetime(options["create_time"])
+        create_time = parse_task_datetime(
+            options["create_time"]
+        )
 
         if task_status in {
             HybridReferenceTask.Status.Success,
             HybridReferenceTask.Status.Failed,
         }:
-            finish_time = make_aware_datetime(options["finish_time"])
+            finish_time = parse_task_datetime(
+                options["finish_time"]
+            )
         else:
             finish_time = None
 
-        task, created = HybridReferenceTask.objects.update_or_create(
-            uuid=task_uuid,
-            defaults={
-                "user": options["user"],
-                "task_name": options["task_name"],
-                "status": task_status,
-                "tcga_type": options["tcga_type"],
-                "lncrna_type": options["lncrna_type"],
-                "use_padj": options["use_padj"],
-                "map_info": options["map_info"],
-                "deg_method": options["deg_method"],
-                "mrna_file": options["mrna_file"],
-                "meta_file": options["meta_file"],
-                "logfc_cutoff_mrna": options["logfc_cutoff_mrna"],
-                "padj_cutoff_mrna": options["padj_cutoff_mrna"],
-                "finish_time": finish_time,
-            },
+        task, created = (
+            HybridReferenceTask.objects.update_or_create(
+                uuid=task_uuid,
+                defaults={
+                    "user": options["user"],
+                    "task_name": options["task_name"],
+                    "status": task_status,
+                    "tcga_type": options["tcga_type"],
+                    "lncrna_type": options["lncrna_type"],
+                    "use_padj": options["use_padj"],
+                    "map_info": options["map_info"],
+                    "deg_method": options["deg_method"],
+                    "mrna_file": options["mrna_file"],
+                    "meta_file": options["meta_file"],
+                    "logfc_cutoff_mrna": options[
+                        "logfc_cutoff_mrna"
+                    ],
+                    "padj_cutoff_mrna": options[
+                        "padj_cutoff_mrna"
+                    ],
+                    "finish_time": finish_time,
+                },
+            )
         )
 
-        HybridReferenceTask.objects.filter(uuid=task_uuid).update(
+        # create_time 使用 auto_now_add=True。
+        # 普通 save() 无法可靠覆盖该字段，因此通过 update() 写入。
+        HybridReferenceTask.objects.filter(
+            uuid=task_uuid,
+        ).update(
             create_time=create_time,
         )
 
@@ -206,28 +250,58 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Demo HybridReferenceTask {action}: {task.uuid}"
+                f"Demo HybridReferenceTask {action}: "
+                f"{task.uuid}"
             )
         )
 
+        self.stdout.write(f"id: {task.id}")
+        self.stdout.write(f"uuid: {task.uuid}")
         self.stdout.write(f"task_name: {task.task_name}")
         self.stdout.write(f"user: {task.user}")
-        self.stdout.write(f"status: {task.status} ({task.get_status_display()})")
-        self.stdout.write(f"create_time: {task.create_time}")
-        self.stdout.write(f"finish_time: {task.finish_time}")
+        self.stdout.write(
+            f"status: {task.status} "
+            f"({task.get_status_display()})"
+        )
 
         self.stdout.write(f"tcga_type: {task.tcga_type}")
-        self.stdout.write(f"lncrna_type: {task.lncrna_type}")
+        self.stdout.write(
+            f"lncrna_type: {task.lncrna_type}"
+        )
         self.stdout.write(f"use_padj: {task.use_padj}")
         self.stdout.write(f"map_info: {task.map_info}")
-        self.stdout.write(f"deg_method: {task.deg_method}")
+        self.stdout.write(
+            f"deg_method: {task.deg_method}"
+        )
 
         self.stdout.write(f"mrna_file: {task.mrna_file}")
         self.stdout.write(f"meta_file: {task.meta_file}")
 
-        self.stdout.write(f"logfc_cutoff_mrna: {task.logfc_cutoff_mrna}")
-        self.stdout.write(f"padj_cutoff_mrna: {task.padj_cutoff_mrna}")
+        self.stdout.write(
+            f"logfc_cutoff_mrna: "
+            f"{task.logfc_cutoff_mrna}"
+        )
+        self.stdout.write(
+            f"padj_cutoff_mrna: "
+            f"{task.padj_cutoff_mrna}"
+        )
 
-        self.stdout.write(f"workspace: {task.get_workspace_dir_absolute_path()}")
-        self.stdout.write(f"input_dir: {task.get_input_dir_absolute_path()}")
-        self.stdout.write(f"output_dir: {task.get_output_dir_absolute_path()}")
+        self.stdout.write(
+            f"create_time: {task.create_time}"
+        )
+        self.stdout.write(
+            f"finish_time: {task.finish_time}"
+        )
+
+        self.stdout.write(
+            "workspace: "
+            f"{task.get_workspace_dir_absolute_path()}"
+        )
+        self.stdout.write(
+            "input_dir: "
+            f"{task.get_input_dir_absolute_path()}"
+        )
+        self.stdout.write(
+            "output_dir: "
+            f"{task.get_output_dir_absolute_path()}"
+        )

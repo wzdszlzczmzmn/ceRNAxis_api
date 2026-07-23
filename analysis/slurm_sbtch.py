@@ -1,10 +1,11 @@
 import subprocess
 
-from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
+from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask, SCSTHybridReferenceTask
 from analysis.utils.custom_list_query_task_utils import get_task_output_dir
 from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_input_files, \
     get_hybrid_reference_task_output_dir, HYBRID_REFERENCE_VALID_TCGA_TYPES, HYBRID_REFERENCE_VALID_LNCRNA_TYPES, \
-    HYBRID_REFERENCE_VALID_DEG_METHODS
+    HYBRID_REFERENCE_VALID_DEG_METHODS, SCST_HYBRID_REFERENCE_ID_COLUMN_MAP, SCST_HYBRID_REFERENCE_VALID_DATA_TYPES, \
+    get_scst_hybrid_reference_task_output_dir, validate_scst_hybrid_reference_input_files
 from analysis.utils.immune_annotation_path_utils import validate_immune_annotation_file
 from analysis.utils.paired_cohort_task_utils import validate_paired_cohort_input_files, \
     get_paired_cohort_task_output_dir
@@ -14,6 +15,7 @@ from analysis.utils.slurm_path_utils import validate_slurm_script, get_pipeline_
 CUSTOM_LIST_QUERY_SLURM_SCRIPT = "submit_custom_list_query_task.sh"
 PAIRED_COHORT_SLURM_SCRIPT = "submit_paired_cohort_task.sh"
 HYBRID_REFERENCE_SLURM_SCRIPT = "submit_hybrid_reference_task.sh"
+SCST_HYBRID_REFERENCE_SLURM_SCRIPT = "submit_scst_hybrid_reference_task.sh"
 
 
 def _join_rna_values(values) -> str:
@@ -444,6 +446,230 @@ def sbatch_hybrid_reference_task(task_uuid) -> dict:
     return {
         "success": True,
         "msg": "SLURM job submitted successfully.",
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "command": command,
+    }
+
+
+def sbatch_scst_hybrid_reference_task(task_uuid) -> dict:
+    """
+    Submit SCSTHybridReferenceTask to SLURM.
+
+    Expected SLURM script arguments:
+        1. uuid
+        2. dataset
+        3. data_type
+        4. exp_file
+        5. meta_file
+        6. tcga_type
+        7. lncrna_type
+        8. outdir
+        9. group_col
+        10. logfc_cutoff_mrna
+        11. padj_cutoff_mrna
+        12. map_info_csv
+        13. use_padj
+    """
+
+    try:
+        task = SCSTHybridReferenceTask.objects.get(
+            uuid=task_uuid
+        )
+    except SCSTHybridReferenceTask.DoesNotExist:
+        return {
+            "success": False,
+            "msg": (
+                "SCSTHybridReferenceTask not found: "
+                f"{task_uuid}"
+            ),
+            "stdout": "",
+            "stderr": "",
+        }
+
+    try:
+        script_path = validate_slurm_script(
+            SCST_HYBRID_REFERENCE_SLURM_SCRIPT
+        )
+
+        map_info_file = validate_immune_annotation_file(
+            task.map_info
+        )
+
+        input_files = (
+            validate_scst_hybrid_reference_input_files(
+                task
+            )
+        )
+
+        output_dir = (
+            get_scst_hybrid_reference_task_output_dir(
+                task
+            )
+        )
+        output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        stdout_file = get_pipeline_stdout_file_path(
+            output_dir
+        )
+        stderr_file = get_pipeline_stderr_file_path(
+            output_dir
+        )
+
+        dataset = str(task.task_name).strip()
+
+        if not dataset:
+            raise ValueError(
+                "Missing task_name for SC/ST hybrid "
+                "reference task."
+            )
+
+        if (
+            task.data_type
+            not in SCST_HYBRID_REFERENCE_VALID_DATA_TYPES
+        ):
+            raise ValueError(
+                "Invalid data_type. Allowed values are: "
+                f"{', '.join(SCST_HYBRID_REFERENCE_VALID_DATA_TYPES)}."
+            )
+
+        if (
+            task.tcga_type
+            not in HYBRID_REFERENCE_VALID_TCGA_TYPES
+        ):
+            raise ValueError(
+                "Invalid tcga_type. Allowed values are: "
+                f"{', '.join(HYBRID_REFERENCE_VALID_TCGA_TYPES)}."
+            )
+
+        if (
+            task.lncrna_type
+            not in HYBRID_REFERENCE_VALID_LNCRNA_TYPES
+        ):
+            raise ValueError(
+                "Invalid lncrna_type. Allowed values are: "
+                f"{', '.join(HYBRID_REFERENCE_VALID_LNCRNA_TYPES)}."
+            )
+
+        group_col = str(task.group_col).strip()
+
+        if not group_col:
+            raise ValueError(
+                "Missing group_col for SC/ST hybrid "
+                "reference task."
+            )
+
+        expected_id_column = (
+            SCST_HYBRID_REFERENCE_ID_COLUMN_MAP.get(
+                task.data_type
+            )
+        )
+
+        if not expected_id_column:
+            raise ValueError(
+                "Unable to determine identifier column "
+                f"for data_type: {task.data_type}."
+            )
+
+        if group_col == expected_id_column:
+            raise ValueError(
+                "group_col cannot be the identifier column "
+                f"'{expected_id_column}'."
+            )
+
+        if task.logfc_cutoff_mrna < 0:
+            raise ValueError(
+                "logfc_cutoff_mrna must be greater than "
+                "or equal to 0."
+            )
+
+        if (
+            task.padj_cutoff_mrna <= 0
+            or task.padj_cutoff_mrna > 1
+        ):
+            raise ValueError(
+                "padj_cutoff_mrna must be in the range "
+                "(0, 1]."
+            )
+
+        if not isinstance(task.use_padj, bool):
+            raise ValueError(
+                "Invalid use_padj. Allowed values are "
+                "True or False."
+            )
+
+        use_padj = (
+            "TRUE"
+            if task.use_padj
+            else "FALSE"
+        )
+
+    except Exception as e:
+        return {
+            "success": False,
+            "msg": str(e),
+            "stdout": "",
+            "stderr": "",
+        }
+
+    command = [
+        "sbatch",
+        f"--job-name={get_slurm_job_name(task.uuid)}",
+        f"--output={stdout_file}",
+        f"--error={stderr_file}",
+        str(script_path),
+
+        str(task.uuid),
+        dataset,
+        task.data_type,
+        str(input_files["exp_file"]),
+        str(input_files["meta_file"]),
+        task.tcga_type,
+        task.lncrna_type,
+        str(output_dir),
+        group_col,
+        str(task.logfc_cutoff_mrna),
+        str(task.padj_cutoff_mrna),
+        str(map_info_file),
+        use_padj,
+    ]
+
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as e:
+        return {
+            "success": False,
+            "msg": (
+                "Failed to execute sbatch command: "
+                f"{e}"
+            ),
+            "stdout": "",
+            "stderr": "",
+            "command": command,
+        }
+
+    if result.returncode != 0:
+        return {
+            "success": False,
+            "msg": "Failed to submit SC/ST SLURM job.",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "command": command,
+        }
+
+    return {
+        "success": True,
+        "msg": (
+            "SC/ST SLURM job submitted successfully."
+        ),
         "stdout": result.stdout,
         "stderr": result.stderr,
         "command": command,

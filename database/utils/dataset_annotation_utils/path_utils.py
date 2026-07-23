@@ -30,6 +30,12 @@ TIMEDB_GROUP_BY_SUFFIX_OPTIONS = {
 }
 
 
+TIMEDB_IGNORED_JSON_GROUP_BY_FIELDS = {
+    "c_tumor_grade",
+    "c_tumor_stage",
+}
+
+
 TIMEDB_GROUP_TYPES = {
     "common",
     "grade",
@@ -476,11 +482,13 @@ def get_timedb_json_group_by_options(dataset_name: str) -> list[dict]:
     Base annotation directory:
     module3/{dataset_name}
 
-    value 使用 JSON 中的原始字段，例如：
-    - c_tumor_grade
-    - c_tumor_stage
+    value 使用 JSON 中的原始字段。
 
-    group_type 用于后续接口区分目录类型：
+    以下字段不作为 common 类型返回，因为已经由独立目录提供：
+    - c_tumor_grade -> grade
+    - c_tumor_stage -> stage
+
+    group_type:
     - common -> module3/{dataset_name}
     """
     dataset_name = validate_annotation_dataset_name(dataset_name)
@@ -493,6 +501,9 @@ def get_timedb_json_group_by_options(dataset_name: str) -> list[dict]:
         group_by = str(group_by or "").strip()
 
         if not group_by:
+            continue
+
+        if group_by.lower() in TIMEDB_IGNORED_JSON_GROUP_BY_FIELDS:
             continue
 
         results.append(

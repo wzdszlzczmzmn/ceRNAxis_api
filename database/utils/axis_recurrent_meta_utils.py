@@ -1,5 +1,3 @@
-# database/utils/axis_recurrent_meta_utils.py
-
 from database.models import AxisRecurrentSummary
 
 
