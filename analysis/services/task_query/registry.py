@@ -3,7 +3,7 @@ from typing import Callable
 
 from .formatters import (
     format_custom_list_query_task,
-    format_paired_cohort_task, format_hybrid_reference_task,
+    format_paired_cohort_task, format_hybrid_reference_task, format_scst_hybrid_reference_task,
 )
 
 
@@ -25,6 +25,10 @@ TASK_QUERY_REGISTRY = [
     TaskQueryConfig(
         task_type="HybridReferenceTask",
         formatter=format_hybrid_reference_task,
+    ),
+    TaskQueryConfig(
+        task_type="SCSTHybridReferenceTask",
+        formatter=format_scst_hybrid_reference_task,
     ),
 ]
 

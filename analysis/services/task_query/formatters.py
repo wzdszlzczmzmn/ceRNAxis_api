@@ -2,9 +2,8 @@ from django.utils import timezone
 
 from analysis.utils.paired_cohort_task_utils import (
     get_available_paired_cohort_deg_rna_types,
-    get_available_paired_cohort_background_types,
     PairedCohortTaskPathError,
-    PairedCohortTaskInputError, PAIRED_COHORT_VALID_BACKGROUND_TYPES,
+    PAIRED_COHORT_VALID_BACKGROUND_TYPES,
 )
 from analysis.utils.workflow_detail_utils.workflow_deg_volcano_utils import get_workflow_available_deg_rna_types, \
     WORKFLOW_DEG_HYBRID_REFERENCE_RNA_TYPES, get_workflow_available_deg_scopes, WORKFLOW_DEG_HYBRID_REFERENCE_SCOPES
@@ -268,4 +267,65 @@ def format_hybrid_reference_task(task, position=0) -> dict:
         "available_deg_rna_types": available_deg_rna_types,
         "available_deg_scopes": available_deg_scopes,
         "available_background_types": available_background_types,
+    }
+
+
+def format_scst_hybrid_reference_task(task, position=0) -> dict:
+    """Format SC/ST hybrid-reference tasks for the unified task query API."""
+    # available_background_types = get_available_workflow_log2fc_background_types(
+    #     task=task,
+    #     valid_types=HYBRID_REFERENCE_VALID_BACKGROUND_TYPES,
+    # )
+    #
+    # available_deg_rna_types = get_workflow_available_deg_rna_types(
+    #     task=task,
+    #     valid_rna_types=WORKFLOW_DEG_HYBRID_REFERENCE_RNA_TYPES,
+    # )
+    #
+    # available_deg_scopes = get_workflow_available_deg_scopes(
+    #     task=task,
+    #     rna_type="mRNA",
+    #     valid_scopes=WORKFLOW_DEG_HYBRID_REFERENCE_SCOPES,
+    # )
+
+    exp_file = getattr(task, "exp_file", "") or ""
+    meta_file = getattr(task, "meta_file", "") or ""
+
+    return {
+        "uuid": str(task.uuid),
+        "status": task.status,
+        "status_label": task.get_status_display(),
+        "position": position,
+
+        "task_name": task.task_name,
+        "user": getattr(task, "user", "") or "",
+        "map_info": task.map_info,
+
+        "data_type": task.data_type,
+        "data_type_label": task.get_data_type_display(),
+        "tcga_type": task.tcga_type,
+        "lncrna_type": task.lncrna_type,
+        "group_col": task.group_col,
+        "use_padj": getattr(task, "use_padj", True),
+
+        "create_time": format_datetime(task.create_time),
+        "finish_time": format_datetime(task.finish_time),
+
+        "files": {
+            "exp_file": exp_file,
+            "meta_file": meta_file,
+        },
+
+        "uploaded_rna_types": ["mRNA"] if exp_file else [],
+
+        "cutoffs": {
+            "mRNA": {
+                "logfc_cutoff": task.logfc_cutoff_mrna,
+                "pvalue_cutoff": task.padj_cutoff_mrna,
+            },
+        },
+
+        # "available_deg_rna_types": available_deg_rna_types,
+        # "available_deg_scopes": available_deg_scopes,
+        # "available_background_types": available_background_types,
     }
