@@ -220,6 +220,19 @@ class AxisRecurrentSummarySearchView(ListAPIView):
                 sponge_context_count=0,
             )
 
+        has_both_result_context = filters.get(
+            "has_both_result_context"
+        )
+
+        if has_both_result_context is True:
+            queryset = queryset.filter(
+                both_result_context_count__gt=0,
+            )
+        elif has_both_result_context is False:
+            queryset = queryset.filter(
+                both_result_context_count=0,
+            )
+
         dominant_regulations = filters.get(
             "dominant_axis_regulation",
             [],
