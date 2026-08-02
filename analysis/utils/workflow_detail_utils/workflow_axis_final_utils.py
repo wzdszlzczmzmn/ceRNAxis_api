@@ -40,11 +40,21 @@ HYBRID_REFERENCE_AXIS_FINAL_COLUMNS = [
     *WORKFLOW_AXIS_FINAL_LNCRNA_COLUMNS,
 ]
 
+SCST_HYBRID_REFERENCE_AXIS_FINAL_COLUMNS = [
+    *WORKFLOW_AXIS_FINAL_CORE_COLUMNS,
+    *WORKFLOW_AXIS_FINAL_LNCRNA_COLUMNS,
+]
+
+
 PAIRED_COHORT_AXIS_FINAL_REQUIRED_COLUMNS = [
     *WORKFLOW_AXIS_FINAL_CORE_COLUMNS,
 ]
 
 HYBRID_REFERENCE_AXIS_FINAL_REQUIRED_COLUMNS = [
+    *WORKFLOW_AXIS_FINAL_CORE_COLUMNS,
+]
+
+SCST_HYBRID_REFERENCE_AXIS_FINAL_REQUIRED_COLUMNS = [
     *WORKFLOW_AXIS_FINAL_CORE_COLUMNS,
 ]
 
@@ -319,3 +329,56 @@ def resolve_existing_axis_final_columns(
         for col in candidate_columns
         if col in existing_columns
     ]
+
+
+def get_scst_hybrid_reference_axis_final_file_path(
+    task,
+    group_value: str,
+) -> Path:
+    task_name = str(task.task_name).strip()
+    validate_safe_name(
+        task_name,
+        "task_name",
+    )
+
+    group_value = str(group_value).strip()
+    validate_safe_name(
+        group_value,
+        "group_value",
+    )
+
+    output_dir = (
+        get_workflow_task_output_dir(task)
+    )
+    file_path = (
+        output_dir
+        /
+        f"{task_name}_ceRNA_{group_value}_axis_final.csv"
+    ).resolve()
+
+    if not str(file_path).startswith(
+        str(output_dir)
+    ):
+        raise WorkflowAxisFinalPathError(
+            "Invalid SCST ceRNA axis final file path."
+        )
+
+    return file_path
+
+
+def read_scst_hybrid_reference_axis_final_file(
+    task,
+    group_value: str,
+    required_columns,
+):
+    file_path = (
+        get_scst_hybrid_reference_axis_final_file_path(
+            task,
+            group_value,
+        )
+    )
+
+    return read_axis_final_file_by_path(
+        file_path=file_path,
+        required_columns=required_columns,
+    )

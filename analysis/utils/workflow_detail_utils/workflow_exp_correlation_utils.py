@@ -4,6 +4,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import get_scst_hybrid_reference_group_info, \
+    WorkflowVizInfoPathError, WorkflowVizInfoInputError
 
 WORKFLOW_EXP_CORRELATION_FILENAME_SUFFIX = "_ceRNA_corr.csv"
 
@@ -37,6 +39,11 @@ PAIRED_COHORT_VALID_EXP_CORRELATION_TYPES = [
 ]
 
 HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES = [
+    *BASE_EXP_CORRELATION_TYPES,
+    *CIRCRNA_EXP_CORRELATION_TYPES,
+]
+
+SCST_HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES = [
     *BASE_EXP_CORRELATION_TYPES,
     *CIRCRNA_EXP_CORRELATION_TYPES,
 ]
@@ -667,3 +674,134 @@ def get_workflow_available_exp_correlation_types_from_pairs(
         for type_value in valid_types
         if type_value in observed_types
     ]
+
+
+def get_scst_workflow_exp_correlation_file_path(
+    task,
+    group_value: str,
+) -> Path:
+    task_name = str(task.task_name).strip()
+    group_value = str(group_value or "").strip()
+
+    validate_safe_name(
+        task_name,
+        "task_name",
+    )
+
+    validate_safe_name(
+        group_value,
+        "groupValue",
+    )
+
+    output_dir = get_workflow_task_output_dir(task)
+
+    file_path = (
+        output_dir
+        / f"{task_name}_ceRNA_corr_{group_value}.csv"
+    ).resolve()
+
+    try:
+        file_path.relative_to(output_dir)
+    except ValueError:
+        raise WorkflowExpCorrelationPathError(
+            "Invalid SCST expression correlation file path."
+        )
+
+    return file_path
+
+
+def validate_scst_workflow_exp_correlation_file(
+    task,
+    group_value: str,
+) -> Path:
+    file_path = (
+        get_scst_workflow_exp_correlation_file_path(
+            task=task,
+            group_value=group_value,
+        )
+    )
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            "SCST expression correlation file not found: "
+            f"{file_path.name}"
+        )
+
+    return file_path
+
+
+def read_scst_workflow_exp_correlation_file(
+    task,
+    group_value: str,
+) -> tuple[Path, pd.DataFrame]:
+    file_path = (
+        validate_scst_workflow_exp_correlation_file(
+            task=task,
+            group_value=group_value,
+        )
+    )
+
+    return read_exp_correlation_file_by_path(
+        file_path
+    )
+
+
+def get_required_group_value(request) -> str:
+    group_value = str(
+        request.query_params.get(
+            "groupValue",
+            "",
+        )
+    ).strip()
+
+    if not group_value:
+        raise WorkflowExpCorrelationInputError(
+            "Missing query parameter: groupValue."
+        )
+
+    validate_safe_name(
+        group_value,
+        "groupValue",
+    )
+
+    return group_value
+
+
+def get_required_scst_group_value(
+    *,
+    request,
+    task,
+) -> str:
+    group_value = get_required_group_value(
+        request
+    )
+
+    try:
+        group_info = (
+            get_scst_hybrid_reference_group_info(
+                task
+            )
+        )
+
+    except WorkflowVizInfoPathError as exc:
+        raise WorkflowExpCorrelationPathError(
+            str(exc)
+        ) from exc
+
+    except WorkflowVizInfoInputError as exc:
+        raise WorkflowExpCorrelationInputError(
+            str(exc)
+        ) from exc
+
+    valid_group_values = (
+        group_info.get("group_values") or []
+    )
+
+    if group_value not in valid_group_values:
+        raise WorkflowExpCorrelationInputError(
+            "Invalid groupValue. "
+            "Allowed values are: "
+            f"{', '.join(valid_group_values)}."
+        )
+
+    return group_value

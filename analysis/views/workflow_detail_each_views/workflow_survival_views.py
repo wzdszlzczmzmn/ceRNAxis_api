@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from analysis.models import PairedCohortTask, HybridReferenceTask
+from analysis.models import PairedCohortTask, HybridReferenceTask, SCSTHybridReferenceTask
 from analysis.utils.paired_cohort_task_utils import (
     PairedCohortTaskInputError,
     PairedCohortTaskPathError,
@@ -14,91 +14,174 @@ from analysis.utils.paired_cohort_task_utils import (
 from analysis.utils.hybrid_reference_task_utils import (
     HybridReferenceTaskInputError,
     HybridReferenceTaskPathError,
-    build_hybrid_reference_survival_km_data,
+    build_hybrid_reference_survival_km_data, SCSTHybridReferenceTaskPathError, SCSTHybridReferenceTaskInputError,
+    build_scst_hybrid_reference_survival_km_data,
 )
+from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import WorkflowVizInfoPathError, \
+    WorkflowVizInfoInputError, validate_scst_hybrid_reference_group_value
 
 
 class BaseWorkflowSurvivalKMDataView(APIView):
     task_model = None
     task_label = "Workflow task"
-    not_success_message = "Task is not completed successfully."
+    not_success_message = (
+        "Task is not completed successfully."
+    )
+
     build_result_func = None
+
     path_error_classes = ()
     input_error_classes = ()
 
-    def get_task(self, task_uuid: str):
-        return self.task_model.objects.get(uuid=task_uuid)
+    def get_task(
+        self,
+        task_uuid: str,
+    ):
+        return self.task_model.objects.get(
+            uuid=task_uuid
+        )
 
     def get_status_success_value(self):
         return self.task_model.Status.Success
 
+    def build_result(
+        self,
+        *,
+        request,
+        task,
+    ) -> dict:
+        if self.build_result_func is None:
+            raise RuntimeError(
+                "Missing build_result_func."
+            )
+
+        return self.build_result_func(
+            task
+        )
+
     def get(self, request):
         try:
             task_uuid = str(
-                request.query_params.get("taskUUID", "")
+                request.query_params.get(
+                    "taskUUID",
+                    "",
+                )
             ).strip()
 
             if not task_uuid:
                 return Response(
-                    {"detail": "Missing query parameter: taskUUID."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {
+                        "detail":
+                            "Missing query parameter: taskUUID."
+                    },
+                    status=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
                 )
 
             try:
-                uuid_lib.UUID(task_uuid)
+                uuid_lib.UUID(
+                    task_uuid
+                )
             except ValueError:
                 return Response(
-                    {"detail": "Invalid Task UUID format."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {
+                        "detail":
+                            "Invalid Task UUID format."
+                    },
+                    status=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
                 )
 
             try:
-                task = self.get_task(task_uuid)
+                task = self.get_task(
+                    task_uuid
+                )
             except self.task_model.DoesNotExist:
                 return Response(
                     {
-                        "detail": f"{self.task_label} not found: {task_uuid}."
+                        "detail": (
+                            f"{self.task_label} "
+                            f"not found: {task_uuid}."
+                        )
                     },
-                    status=status.HTTP_404_NOT_FOUND,
+                    status=(
+                        status.HTTP_404_NOT_FOUND
+                    ),
                 )
 
-            if task.status != self.get_status_success_value():
+            if (
+                task.status
+                != self.get_status_success_value()
+            ):
                 return Response(
                     {
                         "detail": (
                             f"{self.not_success_message} "
-                            f"Current status: {task.get_status_display()}."
+                            "Current status: "
+                            f"{task.get_status_display()}."
                         )
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
                 )
 
             try:
-                result = self.build_result_func(task)
-            except self.path_error_classes as e:
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except FileNotFoundError as e:
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            except self.input_error_classes as e:
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST,
+                result = self.build_result(
+                    request=request,
+                    task=task,
                 )
 
-            return Response(result, status=status.HTTP_200_OK)
+            except self.path_error_classes as exc:
+                return Response(
+                    {
+                        "detail": str(exc)
+                    },
+                    status=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
 
-        except Exception as e:
-            print(traceback.format_exc())
+            except FileNotFoundError as exc:
+                return Response(
+                    {
+                        "detail": str(exc)
+                    },
+                    status=(
+                        status.HTTP_404_NOT_FOUND
+                    ),
+                )
+
+            except self.input_error_classes as exc:
+                return Response(
+                    {
+                        "detail": str(exc)
+                    },
+                    status=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
 
             return Response(
-                {"detail": f"Server error: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                result,
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as exc:
+            print(
+                traceback.format_exc()
+            )
+
+            return Response(
+                {
+                    "detail":
+                        f"Server error: {str(exc)}"
+                },
+                status=(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR
+                ),
             )
 
 
@@ -138,3 +221,66 @@ class HybridReferenceSurvivalKMDataView(BaseWorkflowSurvivalKMDataView):
     build_result_func = staticmethod(build_hybrid_reference_survival_km_data)
     path_error_classes = (HybridReferenceTaskPathError,)
     input_error_classes = (HybridReferenceTaskInputError,)
+
+
+class SCSTHybridReferenceSurvivalKMDataView(
+    BaseWorkflowSurvivalKMDataView
+):
+    """
+    Return Kaplan-Meier survival curve data
+    for SCSTHybridReferenceTask.
+
+    Query params:
+        taskUUID:
+            SCSTHybridReferenceTask UUID
+
+        groupValue:
+            Selected SC/ST group value
+
+    Input filename:
+        {task_name}_survival_analysis_{groupValue}.csv
+    """
+
+    task_model = SCSTHybridReferenceTask
+    task_label = "SCSTHybridReferenceTask"
+    not_success_message = "SC/ST hybrid reference task is not completed successfully."
+    path_error_classes = (
+        SCSTHybridReferenceTaskPathError,
+        WorkflowVizInfoPathError,
+    )
+    input_error_classes = (
+        SCSTHybridReferenceTaskInputError,
+        WorkflowVizInfoInputError,
+    )
+
+    def build_result(
+        self,
+        *,
+        request,
+        task,
+    ) -> dict:
+        group_value = str(
+            request.query_params.get(
+                "groupValue",
+                "",
+            )
+        ).strip()
+
+        if not group_value:
+            raise WorkflowVizInfoInputError(
+                "Missing query parameter: groupValue."
+            )
+
+        group_value = (
+            validate_scst_hybrid_reference_group_value(
+                task=task,
+                group_value=group_value,
+            )
+        )
+
+        return (
+            build_scst_hybrid_reference_survival_km_data(
+                task=task,
+                group_value=group_value,
+            )
+        )

@@ -1,7 +1,7 @@
 from pathlib import Path
 import uuid as uuid_lib
 
-from analysis.models import PairedCohortTask, HybridReferenceTask
+from analysis.models import PairedCohortTask, HybridReferenceTask, SCSTHybridReferenceTask
 from analysis.utils.paired_cohort_task_utils import (
     PAIRED_COHORT_INPUT_FILENAME_MAP,
     get_paired_cohort_input_file_path,
@@ -10,7 +10,8 @@ from analysis.utils.paired_cohort_task_utils import (
 from analysis.utils.hybrid_reference_task_utils import (
     HYBRID_REFERENCE_INPUT_FILENAME_MAP,
     get_hybrid_reference_input_file_path,
-    HybridReferenceTaskPathError,
+    HybridReferenceTaskPathError, SCSTHybridReferenceTaskPathError, SCST_HYBRID_REFERENCE_INPUT_FILENAME_MAP,
+    get_scst_hybrid_reference_input_file_path,
 )
 
 
@@ -57,8 +58,8 @@ def validate_uploaded_file_task_uuid(task_uuid: str) -> str:
 
 
 def validate_uploaded_file_type(
-    file_type: str,
-    filename_map: dict,
+        file_type: str,
+        filename_map: dict,
 ) -> str:
     file_type = str(file_type or "").strip()
 
@@ -77,11 +78,11 @@ def validate_uploaded_file_type(
 
 
 def get_uploaded_file_response_info(
-    *,
-    task,
-    file_type: str,
-    filename_map: dict,
-    path_getter,
+        *,
+        task,
+        file_type: str,
+        filename_map: dict,
+        path_getter,
 ) -> dict:
     file_type = validate_uploaded_file_type(
         file_type=file_type,
@@ -93,7 +94,7 @@ def get_uploaded_file_response_info(
             task=task,
             field_name=file_type,
         )
-    except (PairedCohortTaskPathError, HybridReferenceTaskPathError) as e:
+    except (PairedCohortTaskPathError, HybridReferenceTaskPathError, SCSTHybridReferenceTaskPathError) as e:
         raise UploadedFilePathError(str(e)) from e
 
     if not file_path.exists() or not file_path.is_file():
@@ -109,9 +110,9 @@ def get_uploaded_file_response_info(
 
 
 def get_paired_cohort_uploaded_file_response_info(
-    *,
-    task_uuid: str,
-    file_type: str,
+        *,
+        task_uuid: str,
+        file_type: str,
 ) -> dict:
     task_uuid = validate_uploaded_file_task_uuid(task_uuid)
 
@@ -131,9 +132,9 @@ def get_paired_cohort_uploaded_file_response_info(
 
 
 def get_hybrid_reference_uploaded_file_response_info(
-    *,
-    task_uuid: str,
-    file_type: str,
+        *,
+        task_uuid: str,
+        file_type: str,
 ) -> dict:
     task_uuid = validate_uploaded_file_task_uuid(task_uuid)
 
@@ -149,4 +150,41 @@ def get_hybrid_reference_uploaded_file_response_info(
         file_type=file_type,
         filename_map=HYBRID_REFERENCE_INPUT_FILENAME_MAP,
         path_getter=get_hybrid_reference_input_file_path,
+    )
+
+
+def get_scst_hybrid_reference_uploaded_file_response_info(
+        *,
+        task_uuid: str,
+        file_type: str,
+) -> dict:
+    """
+    Download uploaded input file for SC/ST HybridReferenceTask.
+    """
+
+    task_uuid = validate_uploaded_file_task_uuid(
+        task_uuid
+    )
+
+    try:
+        task = (
+            SCSTHybridReferenceTask.objects.get(
+                uuid=task_uuid
+            )
+        )
+
+    except SCSTHybridReferenceTask.DoesNotExist as e:
+        raise UploadedFileTaskNotFoundError(
+            f"SCSTHybridReferenceTask not found: {task_uuid}."
+        ) from e
+
+    return get_uploaded_file_response_info(
+        task=task,
+        file_type=file_type,
+        filename_map=(
+            SCST_HYBRID_REFERENCE_INPUT_FILENAME_MAP
+        ),
+        path_getter=(
+            get_scst_hybrid_reference_input_file_path
+        ),
     )

@@ -6,7 +6,7 @@ from rest_framework import status
 
 from analysis.models import (
     PairedCohortTask,
-    HybridReferenceTask, CustomListQueryTask,
+    HybridReferenceTask, CustomListQueryTask, SCSTHybridReferenceTask,
 )
 
 from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
@@ -22,7 +22,8 @@ from analysis.utils.workflow_detail_utils.workflow_cmap_utils import (
     WorkflowCMapPathError,
     WorkflowCMapInputError,
     read_workflow_cmap_file,
-    build_cmap_response_from_dataframe,
+    build_cmap_response_from_dataframe, SCST_HYBRID_REFERENCE_CMAP_REQUIRED_COLUMNS,
+    read_scst_hybrid_reference_cmap_file,
 )
 
 
@@ -43,6 +44,23 @@ class WorkflowCMapResultBaseView(APIView):
     required_columns = WORKFLOW_CMAP_REQUIRED_COLUMNS
 
     def get_extra_response_data(self, task) -> dict:
+        return {}
+
+    def get_cmap_file(
+            self,
+            request,
+            task,
+    ):
+        return read_workflow_cmap_file(
+            task=task,
+            required_columns=self.required_columns,
+        )
+
+    def get_request_extra_response_data(
+            self,
+            request,
+            task,
+    ):
         return {}
 
     def get(self, request):
@@ -67,9 +85,9 @@ class WorkflowCMapResultBaseView(APIView):
             )
 
             try:
-                cmap_file, df = read_workflow_cmap_file(
+                cmap_file, df = self.get_cmap_file(
+                    request=request,
                     task=task,
-                    required_columns=self.required_columns,
                 )
             except WorkflowCMapPathError as e:
                 return Response(
@@ -97,6 +115,10 @@ class WorkflowCMapResultBaseView(APIView):
                 "uuid": str(task.uuid),
                 "task_type": self.task_type,
                 "task_name": task.task_name,
+                **self.get_request_extra_response_data(
+                    request=request,
+                    task=task,
+                ),
             }
 
             base_response.update(
@@ -195,4 +217,51 @@ class HybridReferenceCMapResultView(WorkflowCMapResultBaseView):
             "lncrna_type": task.lncrna_type,
             "deg_method": task.deg_method,
             "use_padj": getattr(task, "use_padj", True),
+        }
+
+
+class SCSTHybridReferenceCMapResultView(
+    WorkflowCMapResultBaseView
+):
+    task_model = SCSTHybridReferenceTask
+    task_type = "SCSTHybridReferenceTask"
+    task_label = "SC/ST hybrid reference task"
+
+    required_columns = (
+        SCST_HYBRID_REFERENCE_CMAP_REQUIRED_COLUMNS
+    )
+
+    def get_cmap_file(
+        self,
+        request,
+        task,
+    ):
+        group_value = (
+            request.query_params
+            .get("groupValue", "")
+            .strip()
+        )
+
+        if not group_value:
+            raise WorkflowCMapInputError(
+                "Missing required parameter: groupValue."
+            )
+
+        return read_scst_hybrid_reference_cmap_file(
+            task=task,
+            group_value=group_value,
+            required_columns=self.required_columns,
+        )
+
+    def get_request_extra_response_data(
+            self,
+            request,
+            task,
+    ):
+        return {
+            "group_value": (
+                request.query_params
+                .get("groupValue", "")
+                .strip()
+            ),
         }

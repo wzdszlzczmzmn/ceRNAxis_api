@@ -9,9 +9,10 @@ from rest_framework import status
 
 from analysis.utils.workflow_detail_utils.workflow_output_network_builder import WorkflowOutputNetworkBuilderMixin
 from analysis.utils.workflow_detail_utils.workflow_output_network_utils import get_workflow_cerna_axis_file_path, \
-    get_workflow_immune_axis_file_path, WorkflowOutputNetworkPathError
+    get_workflow_immune_axis_file_path, WorkflowOutputNetworkPathError, get_scst_workflow_cerna_axis_file_path, \
+    get_scst_workflow_immune_axis_file_path
 from database.models import RNANode, RNAInteraction
-from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
+from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask, SCSTHybridReferenceTask
 
 from analysis.utils.custom_list_query_task_utils import (
     ALLOWED_RNA_TYPES,
@@ -746,7 +747,7 @@ class WorkflowOutputNetworkBaseView(
             )
 
             try:
-                result = self.build_network(task)
+                result = self.build_network(task, request)
             except WorkflowOutputNetworkPathError as e:
                 return Response(
                     {
@@ -793,7 +794,7 @@ class WorkflowOutputNetworkBaseView(
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def build_network(self, task) -> dict:
+    def build_network(self, task, request=None) -> dict:
         ceRNA_axis_file = get_workflow_cerna_axis_file_path(task)
         immune_axis_file = get_workflow_immune_axis_file_path(task)
 
@@ -836,3 +837,53 @@ class HybridReferenceTaskNetworkView(WorkflowOutputNetworkBaseView):
             "deg_method": task.deg_method,
             "use_padj": task.use_padj,
         }
+
+
+class SCSTHybridReferenceTaskNetworkView(WorkflowOutputNetworkBaseView):
+    task_model = SCSTHybridReferenceTask
+    task_type = "SCSTHybridReferenceTask"
+    task_label = "SC/ST Hybrid reference task"
+
+    cerna_node_source = "scst_hybrid_reference_cerna_axis"
+    cerna_edge_source = "scst_hybrid_reference_cerna_axis"
+    immune_node_source = "scst_hybrid_reference_immune_axis"
+    immune_edge_source = "scst_hybrid_reference_immune_axis"
+
+    def get_extra_metadata(
+            self,
+            task,
+    ) -> dict:
+        return {
+            "data_type": task.data_type,
+            "tcga_type": task.tcga_type,
+            "lncrna_type": task.lncrna_type,
+        }
+
+    def build_network(
+            self,
+            task,
+            request=None,
+    ) -> dict:
+        if request is None:
+            raise WorkflowOutputNetworkPathError(
+                "Missing request context."
+            )
+
+        group_value = request.query_params.get("groupValue", "").strip()
+
+        if not group_value:
+            raise WorkflowOutputNetworkPathError(
+                "Missing required parameter: groupValue."
+            )
+
+        ceRNA_axis_file = get_scst_workflow_cerna_axis_file_path(task, group_value)
+        immune_axis_file = get_scst_workflow_immune_axis_file_path(task, group_value)
+
+        result = self.build_network_from_files(
+            ceRNA_axis_file=ceRNA_axis_file,
+            immune_axis_file=immune_axis_file,
+        )
+
+        result["group_value"] = group_value
+
+        return result

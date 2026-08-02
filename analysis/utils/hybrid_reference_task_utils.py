@@ -93,10 +93,16 @@ HYBRID_REFERENCE_SURVIVAL_REQUIRED_COLUMNS = SURVIVAL_REQUIRED_COLUMNS
 
 HYBRID_REFERENCE_SURVIVAL_GROUPS = DEFAULT_SURVIVAL_GROUPS
 
+SCST_HYBRID_REFERENCE_SURVIVAL_REQUIRED_COLUMNS = SURVIVAL_REQUIRED_COLUMNS
+
+SCST_HYBRID_REFERENCE_SURVIVAL_GROUPS = DEFAULT_SURVIVAL_GROUPS
+
 
 HYBRID_REFERENCE_MRNA_GSEA_FILENAME_SUFFIX = "_mRNA_gsea.csv"
 
 HYBRID_REFERENCE_MRNA_GSEA_REQUIRED_COLUMNS = DEG_PATHWAY_REQUIRED_COLUMNS
+
+SCST_HYBRID_REFERENCE_MRNA_GSEA_REQUIRED_COLUMNS = DEG_PATHWAY_REQUIRED_COLUMNS
 
 
 SCST_HYBRID_REFERENCE_ALLOWED_FILE_FIELDS = [
@@ -608,6 +614,119 @@ def get_scst_hybrid_reference_input_file_path(
         raise SCSTHybridReferenceTaskPathError(
             "Invalid SC/ST Hybrid Reference input file path."
         )
+
+    return file_path
+
+
+def get_scst_hybrid_reference_survival_file_path(
+    *,
+    task,
+    group_value: str,
+) -> Path:
+    task_name = str(
+        task.task_name or ""
+    ).strip()
+
+    group_value = str(
+        group_value or ""
+    ).strip()
+
+    if not task_name:
+        raise SCSTHybridReferenceTaskPathError(
+            "Missing task_name."
+        )
+
+    if (
+        "/" in task_name
+        or "\\" in task_name
+        or ".." in task_name
+    ):
+        raise SCSTHybridReferenceTaskPathError(
+            "Invalid task_name."
+        )
+
+    if not group_value:
+        raise SCSTHybridReferenceTaskPathError(
+            "Missing groupValue."
+        )
+
+    if (
+        "/" in group_value
+        or "\\" in group_value
+        or ".." in group_value
+    ):
+        raise SCSTHybridReferenceTaskPathError(
+            "Invalid groupValue."
+        )
+
+    output_dir = (
+        get_scst_hybrid_reference_task_output_dir(
+            task
+        )
+    )
+
+    file_path = (
+        output_dir
+        / (
+            f"{task_name}"
+            f"_survival_analysis_"
+            f"{group_value}.csv"
+        )
+    ).resolve()
+
+    try:
+        file_path.relative_to(output_dir)
+    except ValueError as exc:
+        raise SCSTHybridReferenceTaskPathError(
+            "Invalid SC/ST Hybrid Reference "
+            "survival analysis file path."
+        ) from exc
+
+    return file_path
+
+
+def get_scst_hybrid_reference_mrna_gsea_file_path(
+    *,
+    task,
+    group_value: str,
+) -> Path:
+    task_name = str(task.task_name or "").strip()
+    group_value = str(group_value or "").strip()
+
+    if not task_name:
+        raise SCSTHybridReferenceTaskPathError(
+            "Missing task_name."
+        )
+
+    if "/" in task_name or "\\" in task_name or ".." in task_name:
+        raise SCSTHybridReferenceTaskPathError(
+            "Invalid task_name."
+        )
+
+    if not group_value:
+        raise SCSTHybridReferenceTaskPathError(
+            "Missing groupValue."
+        )
+
+    if "/" in group_value or "\\" in group_value or ".." in group_value:
+        raise SCSTHybridReferenceTaskPathError(
+            "Invalid groupValue."
+        )
+
+    output_dir = get_scst_hybrid_reference_task_output_dir(task)
+
+    file_path = (
+        output_dir /
+        f"{task_name}_mRNA_gsea_{group_value}.csv"
+    ).resolve()
+
+    try:
+        file_path.relative_to(output_dir)
+    except ValueError as exc:
+        raise SCSTHybridReferenceTaskPathError(
+            "Invalid SC/ST Hybrid Reference "
+            "mRNA GSEA file path."
+        ) from exc
 
     return file_path
 
@@ -1198,3 +1317,188 @@ def validate_scst_uploaded_file_extensions(files) -> None:
                 f"Invalid file type for {field_name}. "
                 f"Allowed file extension(s): {allowed_text}."
             )
+
+
+def validate_scst_hybrid_reference_survival_file(
+    *,
+    task,
+    group_value: str,
+) -> Path:
+    file_path = (
+        get_scst_hybrid_reference_survival_file_path(
+            task=task,
+            group_value=group_value,
+        )
+    )
+
+    if (
+        not file_path.exists()
+        or not file_path.is_file()
+    ):
+        raise FileNotFoundError(
+            "SC/ST Hybrid Reference survival "
+            "analysis file not found: "
+            f"{file_path.name}"
+        )
+
+    return file_path
+
+
+def read_scst_hybrid_reference_survival_file(
+    *,
+    task,
+    group_value: str,
+) -> tuple[Path, pd.DataFrame]:
+    file_path = (
+        validate_scst_hybrid_reference_survival_file(
+            task=task,
+            group_value=group_value,
+        )
+    )
+
+    try:
+        df = pd.read_csv(
+            file_path
+        )
+    except Exception as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            "Failed to read SC/ST Hybrid Reference "
+            "survival analysis file: "
+            f"{str(exc)}"
+        ) from exc
+
+    try:
+        validate_survival_dataframe_columns(
+            df=df,
+            required_columns=(
+                SCST_HYBRID_REFERENCE_SURVIVAL_REQUIRED_COLUMNS
+            ),
+        )
+    except SurvivalKMInputError as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            "SC/ST Hybrid Reference survival "
+            "analysis file is invalid. "
+            f"{str(exc)}"
+        ) from exc
+
+    return file_path, df
+
+
+def build_scst_hybrid_reference_survival_km_data(
+    *,
+    task,
+    group_value: str,
+    title: str = (
+        "TCGA-based ceRNA axis survival analysis"
+    ),
+) -> dict:
+    survival_file, df = (
+        read_scst_hybrid_reference_survival_file(
+            task=task,
+            group_value=group_value,
+        )
+    )
+
+    try:
+        result = (
+            build_survival_km_data_from_dataframe(
+                task=task,
+                survival_file_name=survival_file.name,
+                df=df,
+                title=title,
+                valid_groups=(
+                    SCST_HYBRID_REFERENCE_SURVIVAL_GROUPS
+                ),
+            )
+        )
+    except SurvivalKMInputError as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            str(exc)
+        ) from exc
+
+    result["group_value"] = group_value
+    result["tcga_type"] = task.tcga_type
+
+    return result
+
+
+def validate_scst_hybrid_reference_mrna_gsea_file(
+    *,
+    task,
+    group_value: str,
+) -> Path:
+    file_path = get_scst_hybrid_reference_mrna_gsea_file_path(
+        task=task,
+        group_value=group_value,
+    )
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            "SC/ST Hybrid Reference mRNA GSEA file not found: "
+            f"{file_path.name}"
+        )
+
+    return file_path
+
+
+def read_scst_hybrid_reference_mrna_gsea_file(
+    *,
+    task,
+    group_value: str,
+) -> tuple[Path, pd.DataFrame]:
+    file_path = validate_scst_hybrid_reference_mrna_gsea_file(
+        task=task,
+        group_value=group_value,
+    )
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            "Failed to read SC/ST Hybrid Reference "
+            f"mRNA GSEA file: {str(exc)}"
+        ) from exc
+
+    try:
+        validate_deg_pathway_dataframe_columns(
+            df=df,
+            required_columns=(
+                SCST_HYBRID_REFERENCE_MRNA_GSEA_REQUIRED_COLUMNS
+            ),
+        )
+    except DEGPathwayInputError as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            "SC/ST Hybrid Reference mRNA GSEA file is invalid. "
+            f"{str(exc)}"
+        ) from exc
+
+    return file_path, df
+
+
+def build_scst_hybrid_reference_deg_pathway_data(
+    *,
+    task,
+    group_value: str,
+    title: str = "TCGA-based DEG Pathway Enrichment",
+) -> dict:
+    gsea_file, df = read_scst_hybrid_reference_mrna_gsea_file(
+        task=task,
+        group_value=group_value,
+    )
+
+    try:
+        result = build_deg_pathway_data_from_dataframe(
+            task=task,
+            gsea_file_name=gsea_file.name,
+            df=df,
+            title=title,
+        )
+    except DEGPathwayInputError as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            str(exc)
+        ) from exc
+
+    result["group_value"] = group_value
+    result["tcga_type"] = task.tcga_type
+
+    return result

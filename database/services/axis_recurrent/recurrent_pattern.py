@@ -1,15 +1,17 @@
+from __future__ import annotations
+
 import re
 
 from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 
 
-AXIS_PATTERN_FIELDS = [
+AXIS_PATTERN_FIELDS = (
     "miRNA",
     "mRNA",
     "lncRNA",
     "circRNA",
-]
+)
 
 AXIS_PATTERN_PART_COUNT = len(AXIS_PATTERN_FIELDS)
 
@@ -32,20 +34,14 @@ def parse_axis_recurrent_pattern(
     pattern: str,
 ) -> dict[str, str]:
     """
-    Parse an RNA-only axis pattern:
-
+    Parse:
         miRNA|mRNA|lncRNA|circRNA
 
     Rules:
-        "*"             -> any value, including empty
-        empty segment   -> field must equal ""
-        plain text      -> exact match
-        text with "*"   -> wildcard match
-
-    Examples:
-        *|BRD7|BAZ1A|
-        hsa-mir-*|*||hsa_circ_*
-        hsa-mir-99a|BRD7|BAZ1A|
+        "*"           -> any value, including empty
+        empty segment -> field must equal ""
+        plain text    -> case-insensitive exact match
+        text with "*" -> case-insensitive wildcard match
     """
     pattern = normalize_pattern_value(pattern)
 
@@ -58,12 +54,6 @@ def parse_axis_recurrent_pattern(
             f"{MAX_AXIS_PATTERN_LENGTH} characters."
         )
 
-    # Empty segments must be preserved:
-    #
-    #     hsa-mir-99a|BRD7||hsa_circ_001
-    #
-    # means:
-    #     lncRNA = ""
     parts = pattern.split("|")
 
     if len(parts) != AXIS_PATTERN_PART_COUNT:
@@ -72,7 +62,7 @@ def parse_axis_recurrent_pattern(
             "miRNA|mRNA|lncRNA|circRNA."
         )
 
-    parsed_pattern = {}
+    parsed_pattern: dict[str, str] = {}
 
     for field_name, raw_value in zip(
         AXIS_PATTERN_FIELDS,
@@ -95,12 +85,7 @@ def wildcard_value_to_regex(value: str) -> str:
     """
     Convert '*' wildcard syntax into an anchored safe regex.
 
-    Examples:
-        hsa-mir-* -> ^hsa\\-mir\\-.*$
-        *BRD7*    -> ^.*BRD7.*$
-
-    Other regex characters are escaped, so users cannot inject
-    arbitrary regular expressions.
+    Regex metacharacters supplied by users are escaped.
     """
     escaped_parts = [
         re.escape(part)
@@ -112,40 +97,42 @@ def wildcard_value_to_regex(value: str) -> str:
 
 def build_axis_recurrent_pattern_query(
     pattern: str,
+    *,
+    field_prefix: str = "axis__",
 ) -> Q:
     """
-    Build a Q object from:
+    Build a Q object for a queryset whose RNA fields are located on
+    CanonicalAxis.
 
-        miRNA|mRNA|lncRNA|circRNA
+    AxisStructureRecurrentSummary uses the default prefix ``axis__``.
+    Passing ``field_prefix=""`` remains useful for direct CanonicalAxis
+    querysets.
     """
     parsed_pattern = parse_axis_recurrent_pattern(pattern)
 
     query = Q()
 
     for field_name, value in parsed_pattern.items():
-        # "*" matches every value, including empty strings.
+        lookup_base = f"{field_prefix}{field_name}"
+
         if value == "*":
             continue
 
-        # Empty segment means the RNA field must be empty.
         if value == "":
             query &= Q(**{
-                field_name: "",
+                lookup_base: "",
             })
             continue
 
-        # Internal wildcard.
         if "*" in value:
             query &= Q(**{
-                f"{field_name}__iregex":
+                f"{lookup_base}__iregex":
                     wildcard_value_to_regex(value),
             })
             continue
 
-        # Exact matching. Use iexact if RNA names should be
-        # matched case-insensitively.
         query &= Q(**{
-            f"{field_name}__iexact": value,
+            f"{lookup_base}__iexact": value,
         })
 
     return query
@@ -154,6 +141,8 @@ def build_axis_recurrent_pattern_query(
 def apply_axis_recurrent_pattern(
     queryset,
     pattern: str,
+    *,
+    field_prefix: str = "axis__",
 ):
     pattern = normalize_pattern_value(pattern)
 
@@ -161,8 +150,9 @@ def apply_axis_recurrent_pattern(
         return queryset
 
     try:
-        pattern_query = (
-            build_axis_recurrent_pattern_query(pattern)
+        pattern_query = build_axis_recurrent_pattern_query(
+            pattern,
+            field_prefix=field_prefix,
         )
     except AxisRecurrentPatternError as exc:
         raise ValidationError({

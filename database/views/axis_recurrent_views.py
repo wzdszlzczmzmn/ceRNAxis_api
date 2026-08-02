@@ -1,35 +1,37 @@
+from __future__ import annotations
+
 from django.db.models import Q
 
 from rest_framework.generics import ListAPIView
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from database.models import AxisRecurrentSummary
+from database.models import AxisStructureRecurrentSummary
 from database.pagination.standard_pagination import (
     StandardPageNumberPagination,
 )
 from database.serializers.axis_recurrent_serializers import (
-    AxisRecurrentSummarySerializer,
+    AxisRecurrentSearchRequestSerializer,
+    AxisStructureRecurrentSummarySerializer,
 )
 from database.services.axis_recurrent import (
     apply_axis_recurrent_pattern,
 )
-from database.utils.axis_recurrent_meta_utils import build_axis_recurrent_meta
+from database.utils.axis_recurrent_meta_utils import (
+    build_axis_recurrent_meta,
+)
 
 
 class AxisRecurrentSummarySearchView(ListAPIView):
     """
-    Search and paginate recurrent ceRNA axis summaries.
+    Search the rebuilt recurrent Axis summaries.
 
-    Pattern format:
-        miRNA|mRNA|lncRNA|circRNA
+    Return records already materialized in the recurrent summary tables.
 
-    Pattern rules:
-        *    -> any value
-        ||   -> the corresponding RNA field must be empty
+    Axis Final summary data is included by the response serializer whenever
+    the corresponding optional OneToOne summary exists.
 
-    Example:
+    Request example:
         {
             "page": 1,
             "page_size": 20,
@@ -41,268 +43,208 @@ class AxisRecurrentSummarySearchView(ListAPIView):
                 "source": [
                     "TCGA"
                 ],
-                "min_project_count": 2
+                "min_dataset_count": 2,
+                "has_axis_final": true,
+                "regulation_consistent": [
+                    true
+                ]
             },
-            "sort_field": "project_count",
+            "sort_field": "dataset_count",
             "sort_order": "descend"
         }
     """
 
-    serializer_class = AxisRecurrentSummarySerializer
+    serializer_class = (
+        AxisStructureRecurrentSummarySerializer
+    )
     pagination_class = StandardPageNumberPagination
 
     SORT_FIELD_MAP = {
-        "axis_signature": "axis_signature",
-        "axis_type": "axis_type",
+        "axis_signature":
+            "axis__axis_signature",
+        "axis_type":
+            "axis__axis_type",
 
-        "miRNA": "miRNA",
-        "mRNA": "mRNA",
-        "lncRNA": "lncRNA",
-        "circRNA": "circRNA",
+        "miRNA":
+            "axis__miRNA",
+        "mRNA":
+            "axis__mRNA",
+        "lncRNA":
+            "axis__lncRNA",
+        "circRNA":
+            "axis__circRNA",
 
-        "project_count": "project_count",
-        "dataset_count": "dataset_count",
-        "tcga_project_count": "tcga_project_count",
-        "timedb_project_count": "timedb_project_count",
+        "dataset_count":
+            "dataset_count",
+        "context_count":
+            "context_count",
+
+        "tcga_dataset_count":
+            "tcga_dataset_count",
+        "timedb_dataset_count":
+            "timedb_dataset_count",
+
+        "axis_final_context_count":
+            "axis_final_context_count",
+        "sponge_context_count":
+            "sponge_context_count",
+        "both_result_context_count":
+            "both_result_context_count",
 
         "regulation_pattern_count": (
+            "axis__axis_final_recurrent_summary__"
             "regulation_pattern_count"
         ),
         "dominant_regulation_count": (
+            "axis__axis_final_recurrent_summary__"
             "dominant_regulation_count"
         ),
-        "updated_at": "updated_at",
-    }
 
-    SOURCE_VALUES = {
-        "TCGA",
-        "TIMEDB",
+        "updated_at":
+            "updated_at",
     }
 
     def post(self, request, *args, **kwargs):
-        return self.list(request, *args, **kwargs)
+        return self.list(
+            request,
+            *args,
+            **kwargs,
+        )
 
-    def get_request_data(self) -> dict:
-        data = self.request.data
+    def get_search_data(self) -> dict:
+        cached = getattr(
+            self,
+            "_validated_search_data",
+            None,
+        )
 
-        if not isinstance(data, dict):
-            raise ValidationError({
-                "detail": "Request body must be a JSON object.",
-            })
+        if cached is not None:
+            return cached
 
-        return data
+        serializer = AxisRecurrentSearchRequestSerializer(
+            data=self.request.data,
+        )
+        serializer.is_valid(
+            raise_exception=True,
+        )
 
-    @staticmethod
-    def parse_non_negative_integer(
-        value,
-        *,
-        field_name: str,
-    ) -> int | None:
-        if value in {None, ""}:
-            return None
+        self._validated_search_data = (
+            serializer.validated_data
+        )
 
-        try:
-            value = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValidationError({
-                field_name: (
-                    f"{field_name} must be an integer."
-                ),
-            }) from exc
-
-        if value < 0:
-            raise ValidationError({
-                field_name: (
-                    f"{field_name} cannot be negative."
-                ),
-            })
-
-        return value
-
-    @staticmethod
-    def parse_boolean(
-        value,
-        *,
-        field_name: str,
-    ) -> bool | None:
-        if value in {None, ""}:
-            return None
-
-        if isinstance(value, bool):
-            return value
-
-        normalized = str(value).strip().lower()
-
-        if normalized in {"1", "true", "yes"}:
-            return True
-
-        if normalized in {"0", "false", "no"}:
-            return False
-
-        raise ValidationError({
-            field_name: (
-                f"{field_name} must be a boolean."
-            ),
-        })
+        return self._validated_search_data
 
     def apply_source_filter(
         self,
         queryset,
-        source_values,
+        sources,
     ):
-        if not source_values:
+        if not sources:
             return queryset
-
-        if not isinstance(source_values, list):
-            raise ValidationError({
-                "filters.source": (
-                    "source must be an array."
-                ),
-            })
-
-        normalized_sources = {
-            str(value).strip().upper()
-            for value in source_values
-            if str(value).strip()
-        }
-
-        unsupported_sources = (
-            normalized_sources - self.SOURCE_VALUES
-        )
-
-        if unsupported_sources:
-            raise ValidationError({
-                "filters.source": (
-                    "Unsupported source value(s): "
-                    f"{', '.join(sorted(unsupported_sources))}."
-                ),
-            })
 
         source_query = Q()
 
-        if "TCGA" in normalized_sources:
-            source_query |= Q(tcga_project_count__gt=0)
+        if "TCGA" in sources:
+            source_query |= Q(
+                tcga_dataset_count__gt=0,
+            )
 
-        if "TIMEDB" in normalized_sources:
-            source_query |= Q(timedb_project_count__gt=0)
+        if "TIMEDB" in sources:
+            source_query |= Q(
+                timedb_dataset_count__gt=0,
+            )
 
-        if source_query:
-            queryset = queryset.filter(source_query)
-
-        return queryset
+        return queryset.filter(source_query)
 
     def apply_filters(
             self,
             queryset,
             filters: dict,
     ):
-        if not isinstance(filters, dict):
-            raise ValidationError({
-                "filters": "filters must be an object.",
-            })
-
-        supported_fields = {
+        axis_types = filters.get(
             "axis_type",
-            "source",
-            "dominant_axis_regulation",
-            "regulation_consistent",
-        }
-
-        unsupported_fields = set(filters) - supported_fields
-
-        if unsupported_fields:
-            raise ValidationError({
-                "filters": (
-                    "Unsupported filter field(s): "
-                    f"{', '.join(sorted(unsupported_fields))}."
-                ),
-            })
-
-        axis_types = filters.get("axis_type") or []
+            [],
+        )
 
         if axis_types:
             queryset = queryset.filter(
-                axis_type__in=axis_types,
+                axis__axis_type__in=axis_types,
             )
 
-        dominant_regulations = (
-                filters.get("dominant_axis_regulation") or []
+        queryset = self.apply_source_filter(
+            queryset,
+            filters.get("source", []),
+        )
+
+        min_dataset_count = filters.get(
+            "min_dataset_count"
+        )
+
+        if min_dataset_count is not None:
+            queryset = queryset.filter(
+                dataset_count__gte=min_dataset_count,
+            )
+
+        min_context_count = filters.get(
+            "min_context_count"
+        )
+
+        if min_context_count is not None:
+            queryset = queryset.filter(
+                context_count__gte=min_context_count,
+            )
+
+        has_axis_final = filters.get(
+            "has_axis_final"
+        )
+
+        if has_axis_final is True:
+            queryset = queryset.filter(
+                axis_final_context_count__gt=0,
+            )
+        elif has_axis_final is False:
+            queryset = queryset.filter(
+                axis_final_context_count=0,
+            )
+
+        has_sponge = filters.get(
+            "has_sponge"
+        )
+
+        if has_sponge is True:
+            queryset = queryset.filter(
+                sponge_context_count__gt=0,
+            )
+        elif has_sponge is False:
+            queryset = queryset.filter(
+                sponge_context_count=0,
+            )
+
+        dominant_regulations = filters.get(
+            "dominant_axis_regulation",
+            [],
         )
 
         if dominant_regulations:
-            queryset = queryset.filter(
-                dominant_axis_regulation__in=(
-                    dominant_regulations
-                ),
-            )
+            queryset = queryset.filter(**{
+                (
+                    "axis__axis_final_recurrent_summary__"
+                    "dominant_axis_regulation__in"
+                ): dominant_regulations,
+            })
 
-        consistency_values = (
-                filters.get("regulation_consistent") or []
+        consistency_values = filters.get(
+            "regulation_consistent",
+            [],
         )
 
         if consistency_values:
-            normalized_values = []
-
-            for value in consistency_values:
-                if isinstance(value, bool):
-                    normalized_values.append(value)
-                    continue
-
-                normalized = str(value).strip().lower()
-
-                if normalized in {"true", "1", "yes"}:
-                    normalized_values.append(True)
-                elif normalized in {"false", "0", "no"}:
-                    normalized_values.append(False)
-                else:
-                    raise ValidationError({
-                        "filters.regulation_consistent": (
-                            f"Invalid boolean value: {value}"
-                        ),
-                    })
-
-            queryset = queryset.filter(
-                regulation_consistent__in=(
-                    normalized_values
-                ),
-            )
-
-        sources = {
-            str(value).strip().upper()
-            for value in (filters.get("source") or [])
-            if str(value).strip()
-        }
-
-        unsupported_sources = sources - {
-            "TCGA",
-            "TIMEDB",
-        }
-
-        if unsupported_sources:
-            raise ValidationError({
-                "filters.source": (
-                    "Unsupported source value(s): "
-                    f"{', '.join(sorted(unsupported_sources))}."
-                ),
+            queryset = queryset.filter(**{
+                (
+                    "axis__axis_final_recurrent_summary__"
+                    "regulation_consistent__in"
+                ): consistency_values,
             })
-
-        if sources == {"TCGA"}:
-            queryset = queryset.filter(
-                tcga_project_count__gt=0,
-            )
-
-        elif sources == {"TIMEDB"}:
-            queryset = queryset.filter(
-                timedb_project_count__gt=0,
-            )
-
-        elif sources == {"TCGA", "TIMEDB"}:
-            # OR semantics:
-            # This normally retains all rows with either source.
-            queryset = queryset.filter(
-                Q(tcga_project_count__gt=0)
-                | Q(timedb_project_count__gt=0)
-            )
 
         return queryset
 
@@ -315,61 +257,49 @@ class AxisRecurrentSummarySearchView(ListAPIView):
     ):
         if not sort_field:
             return queryset.order_by(
-                "-project_count",
                 "-dataset_count",
-                "axis_signature",
+                "-context_count",
+                "axis__axis_signature",
             )
 
-        sort_lookup = self.SORT_FIELD_MAP.get(
+        sort_lookup = self.SORT_FIELD_MAP[
             sort_field
-        )
-
-        if sort_lookup is None:
-            raise ValidationError({
-                "sort_field": (
-                    f"Unsupported sort field: "
-                    f"{sort_field}"
-                ),
-            })
-
-        if sort_order not in {
-            None,
-            "",
-            "ascend",
-            "descend",
-        }:
-            raise ValidationError({
-                "sort_order": (
-                    "sort_order must be either "
-                    "'ascend' or 'descend'."
-                ),
-            })
+        ]
 
         if sort_order == "descend":
             sort_lookup = f"-{sort_lookup}"
 
         return queryset.order_by(
             sort_lookup,
-            "axis_signature",
+            "axis__axis_signature",
         )
 
     def get_queryset(self):
-        data = self.get_request_data()
+        data = self.get_search_data()
 
-        pattern = str(
-            data.get("pattern") or ""
-        ).strip()
+        pattern = data.get(
+            "pattern",
+            "",
+        )
 
-        filters = data.get("filters", {}) or {}
+        filters = data.get(
+            "filters",
+            {},
+        )
 
-        sort_field = data.get("sort_field")
-        sort_order = data.get("sort_order")
-
-        queryset = AxisRecurrentSummary.objects.all()
+        queryset = (
+            AxisStructureRecurrentSummary.objects
+            .select_related(
+                "axis",
+                "axis__axis_final_recurrent_summary",
+            )
+            .all()
+        )
 
         queryset = apply_axis_recurrent_pattern(
             queryset,
             pattern,
+            field_prefix="axis__",
         )
 
         queryset = self.apply_filters(
@@ -379,8 +309,8 @@ class AxisRecurrentSummarySearchView(ListAPIView):
 
         queryset = self.apply_sorting(
             queryset,
-            sort_field=sort_field,
-            sort_order=sort_order,
+            sort_field=data.get("sort_field"),
+            sort_order=data.get("sort_order"),
         )
 
         return queryset

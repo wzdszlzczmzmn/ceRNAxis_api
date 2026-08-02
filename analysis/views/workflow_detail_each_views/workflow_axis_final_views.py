@@ -6,7 +6,7 @@ from rest_framework import status
 
 from analysis.models import (
     PairedCohortTask,
-    HybridReferenceTask,
+    HybridReferenceTask, SCSTHybridReferenceTask,
 )
 from analysis.services.axis_final import enrich_axis_final_response_with_project_matches
 
@@ -21,10 +21,11 @@ from analysis.utils.workflow_detail_utils.workflow_axis_final_utils import (
     WorkflowAxisFinalPathError,
     WorkflowAxisFinalInputError,
     read_workflow_axis_final_file,
-    normalize_workflow_axis_final_dataframe,
-    serialize_workflow_axis_final_dataframe, HYBRID_REFERENCE_AXIS_FINAL_COLUMNS, PAIRED_COHORT_AXIS_FINAL_COLUMNS,
+    HYBRID_REFERENCE_AXIS_FINAL_COLUMNS, PAIRED_COHORT_AXIS_FINAL_COLUMNS,
     WORKFLOW_AXIS_FINAL_NUMERIC_COLUMNS, build_axis_final_response_from_dataframe,
     PAIRED_COHORT_AXIS_FINAL_REQUIRED_COLUMNS, HYBRID_REFERENCE_AXIS_FINAL_REQUIRED_COLUMNS,
+    SCST_HYBRID_REFERENCE_AXIS_FINAL_COLUMNS, SCST_HYBRID_REFERENCE_AXIS_FINAL_REQUIRED_COLUMNS,
+    read_scst_hybrid_reference_axis_final_file,
 )
 
 
@@ -88,6 +89,17 @@ class WorkflowAxisFinalDataBaseView(APIView):
 
         return value
 
+    def get_axis_final_file(
+            self,
+            request,
+            task,
+            required_columns,
+    ):
+        return read_workflow_axis_final_file(
+            task=task,
+            required_columns=required_columns,
+        )
+
     def get(self, request):
         try:
             if self.task_model is None:
@@ -113,12 +125,13 @@ class WorkflowAxisFinalDataBaseView(APIView):
             )
 
             required_columns = (
-                self.axis_final_required_columns
-                or self.axis_final_columns
+                    self.axis_final_required_columns
+                    or self.axis_final_columns
             )
 
             try:
-                axis_file, df = read_workflow_axis_final_file(
+                axis_file, df = self.get_axis_final_file(
+                    request=request,
                     task=task,
                     required_columns=required_columns,
                 )
@@ -223,4 +236,44 @@ class HybridReferenceAxisFinalDataView(WorkflowAxisFinalDataBaseView):
             "lncrna_type": task.lncrna_type,
             "deg_method": task.deg_method,
             "use_padj": getattr(task, "use_padj", True),
+        }
+
+
+class SCSTHybridReferenceAxisFinalDataView(WorkflowAxisFinalDataBaseView):
+    task_model = SCSTHybridReferenceTask
+    task_type = "SCSTHybridReferenceTask"
+    task_label = "SC/ST hybrid reference task"
+
+    axis_final_columns = SCST_HYBRID_REFERENCE_AXIS_FINAL_COLUMNS
+    axis_final_required_columns = SCST_HYBRID_REFERENCE_AXIS_FINAL_REQUIRED_COLUMNS
+
+    def get_axis_final_file(
+            self,
+            request,
+            task,
+            required_columns,
+    ):
+        group_value = request.query_params.get("groupValue", "").strip()
+
+        if not group_value:
+            raise WorkflowAxisFinalPathError(
+                "Missing required parameter: groupValue."
+            )
+
+        return (
+            read_scst_hybrid_reference_axis_final_file(
+                task=task,
+                group_value=group_value,
+                required_columns=required_columns,
+            )
+        )
+
+    def get_extra_response_data(self, task):
+        return {
+            "data_type": task.data_type,
+            "tcga_type": task.tcga_type,
+            "group_col": task.group_col,
+            "map_info": task.map_info,
+            "lncrna_type": task.lncrna_type,
+            "use_padj": task.use_padj,
         }

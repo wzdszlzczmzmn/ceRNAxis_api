@@ -6,7 +6,7 @@ from rest_framework import status
 
 from analysis.models import (
     PairedCohortTask,
-    HybridReferenceTask,
+    HybridReferenceTask, SCSTHybridReferenceTask,
 )
 
 from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
@@ -27,7 +27,9 @@ from analysis.utils.workflow_detail_utils.workflow_deg_volcano_utils import (
     read_workflow_deg_file,
     build_workflow_deg_volcano_response_data,
     get_workflow_available_deg_rna_types,
-    get_workflow_available_deg_scopes,
+    get_workflow_available_deg_scopes, SCST_WORKFLOW_DEG_RNA_TYPES, SCST_WORKFLOW_DEG_SCOPES,
+    SCST_WORKFLOW_DEG_SCOPE_ALL, read_scst_workflow_deg_file, get_scst_workflow_available_deg_rna_types,
+    get_scst_workflow_available_deg_scopes,
 )
 
 
@@ -80,6 +82,33 @@ class WorkflowDEGVolcanoBaseView(APIView):
 
     def get_use_padj(self, task) -> bool:
         return bool(getattr(task, "use_padj", True))
+
+    def get_deg_file(
+            self,
+            request,
+            task,
+            rna_type,
+            deg_scope,
+    ):
+        return read_workflow_deg_file(
+            task=task,
+            rna_type=rna_type,
+            deg_scope=deg_scope,
+        )
+
+    def get_available_deg_rna_types(self, request, task):
+        return get_workflow_available_deg_rna_types(
+            task=task,
+            valid_rna_types=self.valid_rna_types,
+            deg_scope=WORKFLOW_DEG_SCOPE_ALL,
+        )
+
+    def get_available_deg_scopes(self, request, task, rna_type):
+        return get_workflow_available_deg_scopes(
+            task=task,
+            rna_type=rna_type,
+            valid_scopes=self.valid_deg_scopes,
+        )
 
     def get(self, request):
         try:
@@ -151,20 +180,13 @@ class WorkflowDEGVolcanoBaseView(APIView):
                 task_label=self.task_label,
             )
 
-            available_deg_rna_types = get_workflow_available_deg_rna_types(
-                task=task,
-                valid_rna_types=self.valid_rna_types,
-                deg_scope=WORKFLOW_DEG_SCOPE_ALL,
-            )
+            available_deg_rna_types = self.get_available_deg_rna_types(request, task)
 
-            available_deg_scopes = get_workflow_available_deg_scopes(
-                task=task,
-                rna_type=rna_type,
-                valid_scopes=self.valid_deg_scopes,
-            )
+            available_deg_scopes = self.get_available_deg_scopes(request, task, rna_type)
 
             try:
-                deg_file, df = read_workflow_deg_file(
+                deg_file, df = self.get_deg_file(
+                    request=request,
                     task=task,
                     rna_type=rna_type,
                     deg_scope=deg_scope,
@@ -285,4 +307,96 @@ class HybridReferenceDEGVolcanoView(WorkflowDEGVolcanoBaseView):
             "lncrna_type": task.lncrna_type,
             "deg_method": task.deg_method,
             "use_padj": getattr(task, "use_padj", True),
+        }
+
+
+class SCSTHybridReferenceDEGVolcanoView(
+    WorkflowDEGVolcanoBaseView
+):
+    task_model = SCSTHybridReferenceTask
+    task_type = "SCSTHybridReferenceTask"
+    task_label = "SC/ST hybrid reference task"
+
+    valid_rna_types = SCST_WORKFLOW_DEG_RNA_TYPES
+    valid_deg_scopes = SCST_WORKFLOW_DEG_SCOPES
+
+    default_rna_type = "mRNA"
+    default_deg_scope = SCST_WORKFLOW_DEG_SCOPE_ALL
+
+    def get_deg_file(
+            self,
+            request,
+            task,
+            rna_type,
+            deg_scope,
+    ):
+        group_value = str(
+            request.query_params.get(
+                "groupValue",
+                "",
+            )
+        ).strip()
+
+        if not group_value:
+            raise WorkflowDEGVolcanoInputError(
+                "Missing query parameter: groupValue."
+            )
+
+        return read_scst_workflow_deg_file(
+            task=task,
+            group_value=group_value,
+            rna_type=rna_type,
+            deg_scope=deg_scope,
+        )
+
+    def get_available_deg_rna_types(self, request, task):
+        group_value = str(
+            self.request.query_params.get(
+                "groupValue",
+                "",
+            )
+        ).strip()
+
+        if not group_value:
+            return []
+
+        return get_scst_workflow_available_deg_rna_types(
+            task=task,
+            group_value=group_value,
+            valid_rna_types=self.valid_rna_types,
+            deg_scope=SCST_WORKFLOW_DEG_SCOPE_ALL,
+        )
+
+    def get_available_deg_scopes(self, request, task, rna_type):
+        group_value = str(
+            request.query_params.get(
+                "groupValue",
+                "",
+            )
+        ).strip()
+
+        if not group_value:
+            return []
+
+        return get_scst_workflow_available_deg_scopes(
+            task=task,
+            group_value=group_value,
+            rna_type=rna_type,
+            valid_scopes=self.valid_deg_scopes,
+        )
+
+    def get_extra_response_data(
+            self,
+            task,
+    ):
+        return {
+            "data_type": task.data_type,
+            "tcga_type": task.tcga_type,
+            "lncrna_type": task.lncrna_type,
+            "map_info": task.map_info,
+            "use_padj": getattr(
+                task,
+                "use_padj",
+                True,
+            ),
         }

@@ -6,7 +6,7 @@ from rest_framework import status
 
 from analysis.models import (
     PairedCohortTask,
-    HybridReferenceTask,
+    HybridReferenceTask, SCSTHybridReferenceTask,
 )
 
 from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
@@ -25,7 +25,8 @@ from analysis.utils.workflow_detail_utils.workflow_log2fc_background_utils impor
     WorkflowLog2FCBackgroundInputError,
     read_workflow_log2fc_background_file,
     get_workflow_available_background_types,
-    build_workflow_log2fc_correlation_response_data,
+    build_workflow_log2fc_correlation_response_data, read_scst_workflow_log2fc_background_file,
+    SCST_HYBRID_REFERENCE_VALID_BACKGROUND_TYPES,
 )
 
 
@@ -38,7 +39,11 @@ class WorkflowLog2FCCorrelationBaseView(APIView):
         type: optional interaction type
 
     Input filename:
+    default:
         {task_name}_ceRNA_background.csv
+
+    SC/ST:
+        {task_name}_ceRNA_{group_value}_background.csv
 
     Plot mapping:
         x = ceRNA_log2FC
@@ -55,6 +60,13 @@ class WorkflowLog2FCCorrelationBaseView(APIView):
 
     def get_extra_response_data(self, task) -> dict:
         return {}
+
+    def get_background_file(
+            self,
+            request,
+            task,
+    ):
+        return read_workflow_log2fc_background_file(task)
 
     def get(self, request):
         try:
@@ -89,7 +101,7 @@ class WorkflowLog2FCCorrelationBaseView(APIView):
             )
 
             try:
-                background_file, df = read_workflow_log2fc_background_file(task)
+                background_file, df = self.get_background_file(request, task)
             except WorkflowLog2FCBackgroundPathError as e:
                 return Response(
                     {"detail": str(e)},
@@ -205,4 +217,52 @@ class HybridReferenceLog2FCCorrelationView(WorkflowLog2FCCorrelationBaseView):
             "lncrna_type": task.lncrna_type,
             "deg_method": task.deg_method,
             "use_padj": getattr(task, "use_padj", True),
+        }
+
+
+class SCSTHybridReferenceLog2FCCorrelationView(
+    WorkflowLog2FCCorrelationBaseView
+):
+    task_model = SCSTHybridReferenceTask
+    task_type = "SCSTHybridReferenceTask"
+    task_label = "SC/ST hybrid reference task"
+
+    valid_background_types = SCST_HYBRID_REFERENCE_VALID_BACKGROUND_TYPES
+
+    def get_background_file(
+        self,
+        request,
+        task,
+    ):
+        group_value = str(
+            request.query_params.get(
+                "groupValue",
+                "",
+            )
+        ).strip()
+
+        if not group_value:
+            raise WorkflowLog2FCBackgroundInputError(
+                "Missing query parameter: groupValue."
+            )
+
+        return read_scst_workflow_log2fc_background_file(
+            task=task,
+            group_value=group_value,
+        )
+
+    def get_extra_response_data(
+        self,
+        task,
+    ) -> dict:
+        return {
+            "data_type": task.data_type,
+            "tcga_type": task.tcga_type,
+            "lncrna_type": task.lncrna_type,
+            "map_info": task.map_info,
+            "use_padj": getattr(
+                task,
+                "use_padj",
+                True,
+            ),
         }

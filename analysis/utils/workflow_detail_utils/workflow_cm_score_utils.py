@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 
 
-CM_SCORE_RESULT_DIR_NAME = "CM_results"
+CUSTOM_LIST_CM_SCORE_RESULT_DIR_NAME = "CM_results"
+CMDRUG_RESULT_DIR_SUFFIX = "_CMdrug_result"
 CM_SCORE_FILE_SUFFIX = "_CM_scores.csv"
 
 
@@ -120,15 +121,76 @@ def get_workflow_task_output_dir(task) -> Path:
     return output_dir
 
 
-def get_workflow_cm_results_dir(task) -> Path:
-    """
-    Return:
-        task_output_dir / CM_results
-    """
+def get_workflow_cm_results_dir(
+    task,
+    *,
+    group_value: str | None = None,
+) -> Path:
     output_dir = get_workflow_task_output_dir(task)
 
+    task_type = task.__class__.__name__
+    task_name = str(
+        getattr(task, "task_name", "") or ""
+    ).strip()
+
+    if not task_name:
+        raise WorkflowCMScorePathError(
+            "Task does not define task_name."
+        )
+
+    if (
+        "/" in task_name
+        or "\\" in task_name
+        or ".." in task_name
+    ):
+        raise WorkflowCMScorePathError(
+            "Invalid task_name."
+        )
+
+    if task_type == "CustomListQueryTask":
+        dir_name = CUSTOM_LIST_CM_SCORE_RESULT_DIR_NAME
+
+    elif task_type in {
+        "PairedCohortTask",
+        "HybridReferenceTask",
+    }:
+        dir_name = (
+            f"{task_name}"
+            f"{CMDRUG_RESULT_DIR_SUFFIX}"
+        )
+
+    elif task_type == "SCSTHybridReferenceTask":
+        group_value = str(
+            group_value or ""
+        ).strip()
+
+        if not group_value:
+            raise WorkflowCMScoreInputError(
+                "Missing required parameter: groupValue."
+            )
+
+        if (
+            "/" in group_value
+            or "\\" in group_value
+            or ".." in group_value
+        ):
+            raise WorkflowCMScoreInputError(
+                "Invalid groupValue parameter."
+            )
+
+        dir_name = (
+            f"{task_name}"
+            f"{CMDRUG_RESULT_DIR_SUFFIX}_"
+            f"{group_value}"
+        )
+
+    else:
+        raise WorkflowCMScorePathError(
+            f"Unsupported CM-score task type: {task_type}."
+        )
+
     cm_results_dir = (
-        output_dir / CM_SCORE_RESULT_DIR_NAME
+        output_dir / dir_name
     ).resolve()
 
     try:
@@ -141,19 +203,26 @@ def get_workflow_cm_results_dir(task) -> Path:
     return cm_results_dir
 
 
-def validate_workflow_cm_results_dir(task) -> Path:
-    cm_results_dir = get_workflow_cm_results_dir(task)
+def validate_workflow_cm_results_dir(
+    task,
+    *,
+    group_value: str | None = None,
+) -> Path:
+    cm_results_dir = get_workflow_cm_results_dir(
+        task,
+        group_value=group_value,
+    )
 
     if not cm_results_dir.exists():
         raise FileNotFoundError(
-            f"CM-results directory not found: "
-            f"{CM_SCORE_RESULT_DIR_NAME}"
+            "CM-results directory not found: "
+            f"{cm_results_dir.name}"
         )
 
     if not cm_results_dir.is_dir():
         raise WorkflowCMScorePathError(
-            f"CM-results path is not a directory: "
-            f"{CM_SCORE_RESULT_DIR_NAME}"
+            "CM-results path is not a directory: "
+            f"{cm_results_dir.name}"
         )
 
     return cm_results_dir
@@ -239,9 +308,12 @@ def get_workflow_cm_score_filename(
 def get_workflow_cm_score_file_path(
     task,
     item_value: str,
+    *,
+    group_value: str | None = None,
 ) -> Path:
     cm_results_dir = get_workflow_cm_results_dir(
-        task
+        task,
+        group_value=group_value,
     )
 
     filename = get_workflow_cm_score_filename(
@@ -249,11 +321,14 @@ def get_workflow_cm_score_file_path(
     )
 
     file_path = (
-        cm_results_dir / filename
+        cm_results_dir /
+        filename
     ).resolve()
 
     try:
-        file_path.relative_to(cm_results_dir)
+        file_path.relative_to(
+            cm_results_dir
+        )
     except ValueError as exc:
         raise WorkflowCMScorePathError(
             "Invalid CM-score result file path."
@@ -265,15 +340,21 @@ def get_workflow_cm_score_file_path(
 def validate_workflow_cm_score_file(
     task,
     item_value: str,
+    *,
+    group_value: str | None = None,
 ) -> Path:
     file_path = get_workflow_cm_score_file_path(
         task=task,
         item_value=item_value,
+        group_value=group_value,
     )
 
-    if not file_path.exists() or not file_path.is_file():
+    if (
+        not file_path.exists()
+        or not file_path.is_file()
+    ):
         raise FileNotFoundError(
-            f"CM-score result file not found: "
+            "CM-score result file not found: "
             f"{file_path.name}"
         )
 
@@ -282,21 +363,14 @@ def validate_workflow_cm_score_file(
 
 def get_available_workflow_cm_score_items(
     task,
+    *,
+    group_value: str | None = None,
 ) -> list[dict]:
-    """
-    Return all valid CM-score files directly inside:
-
-        task_output_dir/CM_results/
-
-    Only files matching:
-        {item}_CM_scores.csv
-
-    are returned.
-
-    The filesystem path is deliberately not exposed to the frontend.
-    """
-    cm_results_dir = get_workflow_cm_results_dir(
-        task
+    cm_results_dir = (
+        get_workflow_cm_results_dir(
+            task,
+            group_value=group_value,
+        )
     )
 
     if (
@@ -311,20 +385,20 @@ def get_available_workflow_cm_score_items(
         if not file_path.is_file():
             continue
 
-        item_value = extract_cm_score_item_value(
-            file_path.name
+        item_value = (
+            extract_cm_score_item_value(
+                file_path.name
+            )
         )
 
         if item_value is None:
             continue
 
-        items.append(
-            {
-                "value": item_value,
-                "label": item_value,
-                "file_name": file_path.name,
-            }
-        )
+        items.append({
+            "value": item_value,
+            "label": item_value,
+            "file_name": file_path.name,
+        })
 
     items.sort(
         key=lambda item: (
@@ -340,12 +414,14 @@ def build_workflow_cm_score_options_response(
     *,
     task,
     task_type: str,
+    group_value: str | None = None,
 ) -> dict:
     items = get_available_workflow_cm_score_items(
-        task
+        task,
+        group_value=group_value,
     )
 
-    return {
+    response = {
         "uuid": str(task.uuid),
         "task_type": task_type,
         "task_name": task.task_name,
@@ -358,25 +434,39 @@ def build_workflow_cm_score_options_response(
         "results": items,
     }
 
+    if group_value is not None:
+        response["group_value"] = group_value
+
+    return response
+
 
 def read_workflow_cm_score_file(
     task,
     item_value: str,
+    *,
+    group_value: str | None = None,
 ) -> tuple[Path, pd.DataFrame]:
-    file_path = validate_workflow_cm_score_file(
-        task=task,
-        item_value=item_value,
+    file_path = (
+        validate_workflow_cm_score_file(
+            task=task,
+            item_value=item_value,
+            group_value=group_value,
+        )
     )
 
     try:
-        dataframe = pd.read_csv(file_path)
+        dataframe = pd.read_csv(
+            file_path
+        )
     except UnicodeDecodeError as exc:
         raise WorkflowCMScoreInputError(
-            f"CM-score file must be UTF-8 encoded: {file_path.name}."
+            "CM-score file must be UTF-8 encoded: "
+            f"{file_path.name}."
         ) from exc
     except Exception as exc:
         raise WorkflowCMScoreInputError(
-            f"Failed to read CM-score result file: {exc}"
+            "Failed to read CM-score result file: "
+            f"{exc}"
         ) from exc
 
     missing_columns = (
@@ -535,6 +625,7 @@ def build_workflow_cm_score_result_response(
     item_value: str,
     file_path: Path,
     dataframe: pd.DataFrame,
+    group_value: str | None = None,
 ) -> dict:
     results = serialize_workflow_cm_score_dataframe(
         dataframe
@@ -544,7 +635,7 @@ def build_workflow_cm_score_result_response(
         results
     )
 
-    return {
+    response = {
         "uuid": str(task.uuid),
         "task_type": task_type,
         "task_name": task.task_name,
@@ -589,3 +680,8 @@ def build_workflow_cm_score_result_response(
 
         "results": results,
     }
+
+    if group_value is not None:
+        response["group_value"] = group_value
+
+    return response

@@ -1,4 +1,6 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 
 class RNANode(models.Model):
@@ -722,4 +724,863 @@ class AxisRecurrentSummary(models.Model):
         return (
             f"{self.axis_signature}: "
             f"{self.project_count} projects"
+        )
+
+
+class AxisDatasetSource(models.TextChoices):
+    TCGA = "TCGA", "TCGA"
+    TIMEDB = "TIMEDB", "TIMEDB"
+
+
+class AxisModule(models.TextChoices):
+    MODULE2 = "module2", "Module 2"
+    MODULE3 = "module3", "Module 3"
+
+
+class AxisGroupType(models.TextChoices):
+    NONE = "none", "None"
+    OTHER = "other", "Other"
+    GRADE = "grade", "Grade"
+    STAGE = "stage", "Stage"
+
+
+class AxisResultKind(models.TextChoices):
+    AXIS_FINAL = "axis_final", "Axis Final"
+    SPONGE = "sponge", "Sponge"
+
+
+class CanonicalAxisType(models.TextChoices):
+    MRNA_MIRNA = "mRNA-miRNA", "mRNA-miRNA"
+    MRNA_MIRNA_LNCRNA = (
+        "mRNA-miRNA-lncRNA",
+        "mRNA-miRNA-lncRNA",
+    )
+    MRNA_MIRNA_CIRCRNA = (
+        "mRNA-miRNA-circRNA",
+        "mRNA-miRNA-circRNA",
+    )
+
+
+class AxisDatasetContext(models.Model):
+    """
+    One dataset/grouping context that may contain multiple Axis result types.
+
+    Module 2:
+        dataset_name must reference a DatasetMetadata.dataset value such as:
+            TCGA_ACC_mRNA
+
+    Module 3:
+        dataset_name references a DatasetMetadata.dataset value such as:
+            GSE20194
+    """
+
+    dataset_source = models.CharField(
+        max_length=20,
+        choices=AxisDatasetSource.choices,
+        db_index=True,
+    )
+
+    module = models.CharField(
+        max_length=20,
+        choices=AxisModule.choices,
+        db_index=True,
+    )
+
+    # The database column remains dataset_name, while the Django field is a
+    # real foreign key to DatasetMetadata.dataset.
+    dataset_metadata = models.ForeignKey(
+        "DatasetMetadata",
+        to_field="dataset",
+        db_column="dataset_name",
+        on_delete=models.PROTECT,
+        related_name="axis_dataset_contexts",
+    )
+
+    group_type = models.CharField(
+        max_length=20,
+        choices=AxisGroupType.choices,
+        default=AxisGroupType.NONE,
+        db_index=True,
+    )
+
+    group_by = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    annotation_dir_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    annotation_file_prefix = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "axis_dataset_context"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "dataset_source",
+                    "module",
+                    "dataset_metadata",
+                    "group_type",
+                    "group_by",
+                ],
+                name="uniq_axis_dataset_context",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "dataset_source",
+                    "module",
+                    "dataset_metadata",
+                ],
+                name="idx_axis_ctx_source_mod",
+            ),
+            models.Index(
+                fields=[
+                    "dataset_metadata",
+                    "group_type",
+                ],
+                name="idx_axis_ctx_dataset_grp",
+            ),
+        ]
+
+    @property
+    def dataset_name(self) -> str:
+        """
+        Return the referenced DatasetMetadata.dataset value.
+
+        Since dataset_metadata uses to_field='dataset', the foreign-key ID is
+        the dataset name itself rather than DatasetMetadata's integer PK.
+        """
+        return str(self.dataset_metadata_id or "")
+
+    def clean(self):
+        super().clean()
+
+        errors = {}
+        dataset_name = self.dataset_name
+
+        if self.module == AxisModule.MODULE2:
+            if not dataset_name.endswith("_mRNA"):
+                errors["dataset_metadata"] = (
+                    "Module 2 context must reference a "
+                    "DatasetMetadata.dataset ending with '_mRNA'."
+                )
+
+            if self.group_type != AxisGroupType.NONE:
+                errors["group_type"] = (
+                    "Module 2 context must use group_type='none'."
+                )
+
+            if self.group_by:
+                errors["group_by"] = (
+                    "Module 2 context must use an empty group_by value."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        # Context rows are low-volume, so ordinary writes enforce model-level
+        # validation. QuerySet.update() and bulk_create() still bypass this.
+        self.full_clean()
+
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        base = (
+            f"{self.dataset_source}:"
+            f"{self.module}:"
+            f"{self.dataset_name}"
+        )
+
+        if self.group_type != AxisGroupType.NONE:
+            return (
+                f"{base}:"
+                f"{self.group_type}:"
+                f"{self.group_by}"
+            )
+
+        return base
+
+
+class AxisResultArtifact(models.Model):
+    """
+    One imported Axis result file under an AxisDatasetContext.
+
+    The same context may contain multiple result artifacts, such as:
+        - Axis Final
+        - Sponge
+    """
+
+    context = models.ForeignKey(
+        AxisDatasetContext,
+        on_delete=models.CASCADE,
+        related_name="result_artifacts",
+    )
+
+    result_kind = models.CharField(
+        max_length=32,
+        choices=AxisResultKind.choices,
+        db_index=True,
+    )
+
+    file_name = models.CharField(
+        max_length=255,
+    )
+
+    file_path = models.TextField()
+
+    file_sha256 = models.CharField(
+        max_length=64,
+        db_index=True,
+    )
+
+    row_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    schema_version = models.CharField(
+        max_length=32,
+        blank=True,
+        default="v1",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    imported_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "axis_result_artifact"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "context",
+                    "result_kind",
+                ],
+                condition=Q(is_active=True),
+                name="uniq_active_axis_artifact",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "context",
+                    "result_kind",
+                    "is_active",
+                ],
+                name="idx_axis_art_ctx_kind",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.context_id}:"
+            f"{self.result_kind}:"
+            f"{self.file_name}"
+        )
+
+
+class CanonicalAxis(models.Model):
+    """
+    Source-independent structural identity of one ceRNA Axis.
+
+    axis_signature format:
+        miRNA|mRNA|lncRNA|circRNA
+
+    Examples:
+        hsa-miR-210|ESPL1|CDCA3|
+        hsa-miR-210|ESPL1||hsa_circ_000001
+    """
+
+    # Records the algorithm/schema version without embedding the version into
+    # axis_signature.
+    signature_version = models.PositiveSmallIntegerField(
+        default=2,
+    )
+
+    axis_key = models.CharField(
+        max_length=64,
+        unique=True,
+        help_text=(
+            "SHA-256 of the normalized structural signature: "
+            "miRNA|mRNA|lncRNA|circRNA."
+        ),
+    )
+
+    axis_signature = models.TextField(
+        help_text="miRNA|mRNA|lncRNA|circRNA",
+    )
+
+    axis_type = models.CharField(
+        max_length=64,
+        choices=CanonicalAxisType.choices,
+        db_index=True,
+    )
+
+    miRNA = models.CharField(
+        max_length=255,
+        db_index=True,
+    )
+
+    mRNA = models.CharField(
+        max_length=255,
+        db_index=True,
+    )
+
+    lncRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    circRNA = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "canonical_axis"
+
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(miRNA__gt="")
+                    & Q(mRNA__gt="")
+                ),
+                name="axis_need_mirna_mrna",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(lncRNA="")
+                    | Q(circRNA="")
+                ),
+                name="axis_one_cerna_kind",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "miRNA",
+                    "mRNA",
+                ],
+                name="idx_canon_axis_mir_mrna",
+            ),
+            models.Index(
+                fields=[
+                    "miRNA",
+                    "mRNA",
+                    "lncRNA",
+                ],
+                name="idx_canon_axis_lncrna",
+            ),
+            models.Index(
+                fields=[
+                    "miRNA",
+                    "mRNA",
+                    "circRNA",
+                ],
+                name="idx_canon_axis_circrna",
+            ),
+        ]
+
+    def __str__(self):
+        return self.axis_signature
+
+
+class AxisObservation(models.Model):
+    """
+    One CanonicalAxis row observed in one imported result artifact.
+
+    Structural identity is stored in CanonicalAxis. This model only records
+    where the Axis was observed and its source-file row information.
+    """
+
+    artifact = models.ForeignKey(
+        AxisResultArtifact,
+        on_delete=models.CASCADE,
+        related_name="observations",
+    )
+
+    axis = models.ForeignKey(
+        CanonicalAxis,
+        on_delete=models.PROTECT,
+        related_name="observations",
+    )
+
+    row_index = models.PositiveIntegerField()
+
+    source_axis_id = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    source_axis_type = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+    )
+
+    # Store only source columns that do not yet have stable typed fields.
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "axis_observation"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "artifact",
+                    "row_index",
+                ],
+                name="uniq_axis_artifact_row",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "artifact",
+                    "axis",
+                ],
+                name="uniq_axis_artifact_axis",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "axis",
+                    "artifact",
+                ],
+                name="idx_axis_obs_axis_art",
+            ),
+        ]
+
+    @property
+    def result_kind(self) -> str:
+        return self.artifact.result_kind
+
+    def __str__(self):
+        return f"{self.artifact_id}:{self.axis_id}"
+
+
+class AxisFinalEvidence(models.Model):
+    """
+    Axis Final-specific evidence associated with one AxisObservation.
+    """
+
+    observation = models.OneToOneField(
+        AxisObservation,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="axis_final_evidence",
+    )
+
+    axis_regulation = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    mRNA_log2FC = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
+    mRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    miRNA_log2FC = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
+    miRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    lncRNA_log2FC = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
+    lncRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    circRNA_log2FC = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
+    circRNA_regulation = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    class Meta:
+        db_table = "axis_final_evidence"
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.observation_id
+            and self.observation.artifact.result_kind
+            != AxisResultKind.AXIS_FINAL
+        ):
+            raise ValidationError({
+                "observation": (
+                    "AxisFinalEvidence requires an "
+                    "axis_final result artifact."
+                ),
+            })
+
+    def __str__(self):
+        return f"axis_final:{self.observation_id}"
+
+
+class SpongeEvidence(models.Model):
+    """
+    Sponge-specific statistical evidence associated with one AxisObservation.
+    """
+
+    observation = models.OneToOneField(
+        AxisObservation,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="sponge_evidence",
+    )
+
+    cor = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
+    pcor = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
+    mscor = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "sponge_evidence"
+
+        indexes = [
+            models.Index(
+                fields=["cor"],
+                name="idx_sponge_cor",
+            ),
+            models.Index(
+                fields=["pcor"],
+                name="idx_sponge_pcor",
+            ),
+            models.Index(
+                fields=["mscor"],
+                name="idx_sponge_mscor",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.observation_id
+            and self.observation.artifact.result_kind
+            != AxisResultKind.SPONGE
+        ):
+            raise ValidationError({
+                "observation": (
+                    "SpongeEvidence requires a "
+                    "sponge result artifact."
+                ),
+            })
+
+    def __str__(self):
+        return f"sponge:{self.observation_id}"
+
+
+class AxisContextPresence(models.Model):
+    """
+    Rebuildable context-level index for matching and recurrence queries.
+
+    One row means that one CanonicalAxis is present in one AxisDatasetContext,
+    regardless of how many result artifacts contain the Axis.
+    """
+
+    context = models.ForeignKey(
+        AxisDatasetContext,
+        on_delete=models.CASCADE,
+        related_name="axis_presences",
+    )
+
+    axis = models.ForeignKey(
+        CanonicalAxis,
+        on_delete=models.CASCADE,
+        related_name="context_presences",
+    )
+
+    observation_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    axis_final_observation_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    sponge_observation_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    has_axis_final = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
+    has_sponge = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "axis_context_presence"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "context",
+                    "axis",
+                ],
+                name="uniq_axis_context_presence",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "axis",
+                    "context",
+                ],
+                name="idx_axis_presence_axis_ctx",
+            ),
+            models.Index(
+                fields=[
+                    "axis",
+                    "has_axis_final",
+                ],
+                name="idx_axis_presence_final",
+            ),
+            models.Index(
+                fields=[
+                    "axis",
+                    "has_sponge",
+                ],
+                name="idx_axis_presence_sponge",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.axis_id}@{self.context_id}"
+
+
+class AxisStructureRecurrentSummary(models.Model):
+    axis = models.OneToOneField(
+        CanonicalAxis,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="recurrent_summary",
+    )
+
+    # Primary recurrence metrics
+    context_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+    dataset_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+
+    # Distinct datasets by source
+    tcga_dataset_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+    timedb_dataset_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+
+    # Context counts by source
+    tcga_context_count = models.PositiveIntegerField(default=0)
+    timedb_context_count = models.PositiveIntegerField(default=0)
+
+    # Context counts by module
+    module2_context_count = models.PositiveIntegerField(default=0)
+    module3_context_count = models.PositiveIntegerField(default=0)
+
+    # Result coverage
+    axis_final_context_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+    sponge_context_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+    both_result_context_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    summary_version = models.PositiveSmallIntegerField(default=1)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "axis_structure_recur_summary"
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "-context_count",
+                    "axis",
+                ],
+                name="idx_axis_recur_ctx_count",
+            ),
+            models.Index(
+                fields=[
+                    "-dataset_count",
+                    "axis",
+                ],
+                name="idx_axis_recur_ds_count",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.axis_id}:"
+            f"{self.context_count} contexts"
+        )
+
+
+class AxisFinalRecurrentSummary(models.Model):
+    """
+    Rebuildable Axis Final-specific regulation summary.
+    """
+
+    axis = models.OneToOneField(
+        CanonicalAxis,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="axis_final_recurrent_summary",
+    )
+
+    context_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+
+    observation_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    regulation_pattern_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    dominant_axis_regulation = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    dominant_regulation_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    regulation_consistent = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "axis_final_recur_summary"
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "regulation_consistent",
+                    "-context_count",
+                ],
+                name="idx_axis_final_recur_reg",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.axis_id}:"
+            f"{self.context_count} contexts"
         )

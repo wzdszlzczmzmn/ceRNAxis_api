@@ -8,7 +8,7 @@ from rest_framework import status
 
 from analysis.models import (
     PairedCohortTask,
-    HybridReferenceTask,
+    HybridReferenceTask, SCSTHybridReferenceTask,
 )
 from analysis.utils.hybrid_reference_task_utils import get_hybrid_reference_tcga_expression_file_path
 
@@ -26,13 +26,14 @@ from analysis.utils.workflow_detail_utils.workflow_exp_correlation_utils import 
     WorkflowExpCorrelationInputError,
     read_workflow_exp_correlation_file,
     get_workflow_available_exp_correlation_pairs,
-    get_workflow_available_exp_correlation_types,
     get_workflow_exp_file_fields_by_type,
     get_selected_workflow_exp_correlation_pair_df,
     extract_workflow_exp_correlation_stats,
     get_workflow_exp_rna_types_by_type,
     build_expression_pair_points_from_files, get_workflow_exp_rna_types_for_types, read_expression_gene_set_from_file,
     filter_workflow_exp_correlation_pairs_by_expression_genes, get_workflow_available_exp_correlation_types_from_pairs,
+    read_scst_workflow_exp_correlation_file, SCST_HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES,
+    get_required_scst_group_value,
 )
 
 from analysis.utils.paired_cohort_task_utils import (
@@ -62,6 +63,24 @@ class WorkflowExpCorrelationOptionsBaseView(APIView):
     valid_types = []
 
     should_filter_pairs_by_expression_genes = True
+
+    def read_correlation_file(
+            self,
+            *,
+            request,
+            task,
+    ):
+        return read_workflow_exp_correlation_file(
+            task
+        )
+
+    def get_request_response_data(
+            self,
+            *,
+            request,
+            task,
+    ) -> dict:
+        return {}
 
     def get_extra_response_data(self, task) -> dict:
         return {}
@@ -136,8 +155,11 @@ class WorkflowExpCorrelationOptionsBaseView(APIView):
             )
 
             try:
-                correlation_file, cor_df = read_workflow_exp_correlation_file(
-                    task
+                correlation_file, cor_df = (
+                    self.read_correlation_file(
+                        request=request,
+                        task=task,
+                    )
                 )
 
                 raw_results = get_workflow_available_exp_correlation_pairs(
@@ -182,12 +204,22 @@ class WorkflowExpCorrelationOptionsBaseView(APIView):
                 "available_types": available_types,
                 "raw_count": len(raw_results),
                 "count": len(results),
-                "dropped_count": len(raw_results) - len(results),
+                "dropped_count": (
+                        len(raw_results) -
+                        len(results)
+                ),
                 "results": results,
             }
 
             response_data.update(
                 self.get_extra_response_data(task)
+            )
+
+            response_data.update(
+                self.get_request_response_data(
+                    request=request,
+                    task=task,
+                )
             )
 
             return Response(
@@ -229,6 +261,24 @@ class WorkflowExpCorrelationPlotDataBaseView(APIView):
     task_type = None
     task_label = "Workflow task"
     valid_types = []
+
+    def read_correlation_file(
+            self,
+            *,
+            request,
+            task,
+    ):
+        return read_workflow_exp_correlation_file(
+            task
+        )
+
+    def get_request_response_data(
+            self,
+            *,
+            request,
+            task,
+    ) -> dict:
+        return {}
 
     def get_extra_response_data(self, task) -> dict:
         return {}
@@ -325,8 +375,11 @@ class WorkflowExpCorrelationPlotDataBaseView(APIView):
             )
 
             try:
-                correlation_file, cor_df = read_workflow_exp_correlation_file(
-                    task
+                correlation_file, cor_df = (
+                    self.read_correlation_file(
+                        request=request,
+                        task=task,
+                    )
                 )
 
                 pair_df = get_selected_workflow_exp_correlation_pair_df(
@@ -389,7 +442,17 @@ class WorkflowExpCorrelationPlotDataBaseView(APIView):
             }
 
             response_data.update(point_result)
-            response_data.update(self.get_extra_response_data(task))
+
+            response_data.update(
+                self.get_extra_response_data(task)
+            )
+
+            response_data.update(
+                self.get_request_response_data(
+                    request=request,
+                    task=task,
+                )
+            )
 
             return Response(
                 response_data,
@@ -413,6 +476,142 @@ class WorkflowExpCorrelationPlotDataBaseView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class SCSTExpCorrelationGroupMixin:
+    def get_group_value(
+        self,
+        *,
+        request,
+        task,
+    ) -> str:
+        if hasattr(
+            self,
+            "_resolved_group_value",
+        ):
+            return self._resolved_group_value
+
+        group_value = (
+            get_required_scst_group_value(
+                request=request,
+                task=task,
+            )
+        )
+
+        self._resolved_group_value = (
+            group_value
+        )
+
+        return group_value
+
+    def read_correlation_file(
+        self,
+        *,
+        request,
+        task,
+    ):
+        group_value = self.get_group_value(
+            request=request,
+            task=task,
+        )
+
+        return (
+            read_scst_workflow_exp_correlation_file(
+                task=task,
+                group_value=group_value,
+            )
+        )
+
+    def get_request_response_data(
+        self,
+        *,
+        request,
+        task,
+    ) -> dict:
+        return {
+            "group_value": self.get_group_value(
+                request=request,
+                task=task,
+            ),
+        }
+
+
+class TCGAReferenceExpCorrelationMixin:
+    def get_expression_file_path_by_rna_type(
+        self,
+        *,
+        task,
+        rna_type: str,
+    ):
+        return (
+            get_hybrid_reference_tcga_expression_file_path(
+                task=task,
+                rna_type=rna_type,
+            )
+        )
+
+    def build_plot_points(
+        self,
+        *,
+        task,
+        cor_df: pd.DataFrame,
+        pair_df: pd.DataFrame,
+        gene1: str,
+        gene2: str,
+        type_value: str,
+        correlation_file_name: str,
+    ) -> dict:
+        return build_tcga_reference_exp_correlation_points(
+            task=task,
+            gene1=gene1,
+            gene2=gene2,
+            type_value=type_value,
+        )
+
+
+def build_tcga_reference_exp_correlation_points(
+    *,
+    task,
+    gene1: str,
+    gene2: str,
+    type_value: str,
+) -> dict:
+    rna_type_map = (
+        get_workflow_exp_rna_types_by_type(
+            type_value
+        )
+    )
+
+    gene1_rna_type = (
+        rna_type_map["gene1_rna_type"]
+    )
+
+    gene2_rna_type = (
+        rna_type_map["gene2_rna_type"]
+    )
+
+    gene1_expr_file = (
+        get_hybrid_reference_tcga_expression_file_path(
+            task=task,
+            rna_type=gene1_rna_type,
+        )
+    )
+
+    gene2_expr_file = (
+        get_hybrid_reference_tcga_expression_file_path(
+            task=task,
+            rna_type=gene2_rna_type,
+        )
+    )
+
+    return build_expression_pair_points_from_files(
+        gene1_expr_file=gene1_expr_file,
+        gene2_expr_file=gene2_expr_file,
+        gene1=gene1,
+        gene2=gene2,
+        sample_col="sample_id",
+        sample_ids=None,
+    )
 
 
 class PairedCohortExpCorrelationOptionsView(
@@ -551,24 +750,17 @@ class PairedCohortExpCorrelationPlotDataView(
             "use_padj": getattr(task, "use_padj", True),
         }
 
+
 class HybridReferenceExpCorrelationOptionsView(
-    WorkflowExpCorrelationOptionsBaseView
+    TCGAReferenceExpCorrelationMixin,
+    WorkflowExpCorrelationOptionsBaseView,
 ):
     task_model = HybridReferenceTask
     task_type = "HybridReferenceTask"
     task_label = "Hybrid reference task"
-    valid_types = HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
-
-    def get_expression_file_path_by_rna_type(
-        self,
-        *,
-        task,
-        rna_type: str,
-    ):
-        return get_hybrid_reference_tcga_expression_file_path(
-            task=task,
-            rna_type=rna_type,
-        )
+    valid_types = (
+        HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
+    )
 
     def get_extra_response_data(self, task) -> dict:
         return {
@@ -576,52 +768,24 @@ class HybridReferenceExpCorrelationOptionsView(
             "tcga_type": task.tcga_type,
             "lncrna_type": task.lncrna_type,
             "deg_method": task.deg_method,
-            "use_padj": getattr(task, "use_padj", True),
+            "use_padj": getattr(
+                task,
+                "use_padj",
+                True,
+            ),
         }
 
 
 class HybridReferenceExpCorrelationPlotDataView(
-    WorkflowExpCorrelationPlotDataBaseView
+    TCGAReferenceExpCorrelationMixin,
+    WorkflowExpCorrelationPlotDataBaseView,
 ):
     task_model = HybridReferenceTask
     task_type = "HybridReferenceTask"
     task_label = "Hybrid reference task"
-    valid_types = HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
-
-    def build_plot_points(
-        self,
-        *,
-        task,
-        cor_df: pd.DataFrame,
-        pair_df: pd.DataFrame,
-        gene1: str,
-        gene2: str,
-        type_value: str,
-        correlation_file_name: str,
-    ) -> dict:
-        rna_type_map = get_workflow_exp_rna_types_by_type(type_value)
-
-        gene1_rna_type = rna_type_map["gene1_rna_type"]
-        gene2_rna_type = rna_type_map["gene2_rna_type"]
-
-        gene1_expr_file = get_hybrid_reference_tcga_expression_file_path(
-            task=task,
-            rna_type=gene1_rna_type,
-        )
-
-        gene2_expr_file = get_hybrid_reference_tcga_expression_file_path(
-            task=task,
-            rna_type=gene2_rna_type,
-        )
-
-        return build_expression_pair_points_from_files(
-            gene1_expr_file=gene1_expr_file,
-            gene2_expr_file=gene2_expr_file,
-            gene1=gene1,
-            gene2=gene2,
-            sample_col="sample_id",
-            sample_ids=None,
-        )
+    valid_types = (
+        HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
+    )
 
     def get_extra_response_data(self, task) -> dict:
         return {
@@ -629,5 +793,49 @@ class HybridReferenceExpCorrelationPlotDataView(
             "tcga_type": task.tcga_type,
             "lncrna_type": task.lncrna_type,
             "deg_method": task.deg_method,
-            "use_padj": getattr(task, "use_padj", True),
+            "use_padj": getattr(
+                task,
+                "use_padj",
+                True,
+            ),
+        }
+
+
+class SCSTHybridReferenceExpCorrelationOptionsView(
+    SCSTExpCorrelationGroupMixin,
+    TCGAReferenceExpCorrelationMixin,
+    WorkflowExpCorrelationOptionsBaseView,
+):
+    task_model = SCSTHybridReferenceTask
+    task_type = "SCSTHybridReferenceTask"
+    task_label = "SCST hybrid reference task"
+
+    valid_types = (
+        SCST_HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
+    )
+
+    def get_extra_response_data(self, task) -> dict:
+        return {
+            "tcga_type": task.tcga_type,
+            "lncrna_type": task.lncrna_type,
+        }
+
+
+class SCSTHybridReferenceExpCorrelationPlotDataView(
+    SCSTExpCorrelationGroupMixin,
+    TCGAReferenceExpCorrelationMixin,
+    WorkflowExpCorrelationPlotDataBaseView,
+):
+    task_model = SCSTHybridReferenceTask
+    task_type = "SCSTHybridReferenceTask"
+    task_label = "SCST hybrid reference task"
+
+    valid_types = (
+        SCST_HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
+    )
+
+    def get_extra_response_data(self, task) -> dict:
+        return {
+            "tcga_type": task.tcga_type,
+            "lncrna_type": task.lncrna_type,
         }

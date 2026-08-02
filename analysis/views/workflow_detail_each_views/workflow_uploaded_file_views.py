@@ -14,7 +14,7 @@ from analysis.utils.workflow_detail_utils.workflow_uploaded_file_utils import (
     UploadedFilePathError,
     UploadedFileNotFoundError,
     get_paired_cohort_uploaded_file_response_info,
-    get_hybrid_reference_uploaded_file_response_info,
+    get_hybrid_reference_uploaded_file_response_info, get_scst_hybrid_reference_uploaded_file_response_info,
 )
 
 
@@ -149,4 +149,34 @@ class HybridReferenceUploadedFileDownloadView(BaseUploadedFileDownloadView):
         return get_hybrid_reference_uploaded_file_response_info(
             task_uuid=task_uuid,
             file_type=file_type,
+        )
+
+
+class SCSTHybridReferenceUploadedFileDownloadView(
+    BaseUploadedFileDownloadView
+):
+    """
+    Download uploaded input file for
+    SCSTHybridReferenceTask.
+
+    Query params:
+        taskUUID:
+            SCSTHybridReferenceTask UUID
+
+        file_type:
+            exp_file or meta_file
+    """
+
+    def get_file_response_info(
+        self,
+        *,
+        task_uuid: str,
+        file_type: str,
+    ) -> dict:
+
+        return (
+            get_scst_hybrid_reference_uploaded_file_response_info(
+                task_uuid=task_uuid,
+                file_type=file_type,
+            )
         )

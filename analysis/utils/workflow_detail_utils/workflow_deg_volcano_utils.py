@@ -40,6 +40,27 @@ WORKFLOW_DEG_HYBRID_REFERENCE_SCOPES = [
 ]
 
 
+SCST_WORKFLOW_DEG_RNA_TYPES = [
+    "mRNA",
+]
+
+SCST_WORKFLOW_DEG_SCOPE_ALL = "all"
+SCST_WORKFLOW_DEG_SCOPE_INTERSECT = "intersect"
+
+SCST_WORKFLOW_DEG_SCOPES = [
+    SCST_WORKFLOW_DEG_SCOPE_ALL,
+    SCST_WORKFLOW_DEG_SCOPE_INTERSECT,
+]
+
+SCST_WORKFLOW_DEG_FILENAME_TEMPLATE = (
+    "{task_name}_deg_{group_value}.csv"
+)
+
+SCST_WORKFLOW_DEG_INTERSECT_FILENAME_TEMPLATE = (
+    "{task_name}_mRNA_deg_{group_value}_intersect.csv"
+)
+
+
 class WorkflowDEGVolcanoInputError(ValueError):
     pass
 
@@ -359,7 +380,7 @@ def build_workflow_deg_volcano_response_data(
         deg_file_name=deg_file_name,
         rna_type=rna_type,
         deg_scope=deg_scope,
-        deg_method=task.deg_method,
+        deg_method=getattr(task, "deg_method", None),
         use_padj=use_padj,
         base_response=base_response,
     )
@@ -445,3 +466,416 @@ def build_deg_volcano_response_data_from_dataframe(
         }
 
     return response_data
+
+
+def validate_scst_deg_group_value(
+    group_value: str,
+) -> str:
+    """
+    Validate a cell type/group value used in an SC/ST DEG filename.
+
+    Spaces, parentheses, plus signs and similar label characters are
+    permitted. Path separators and traversal sequences are forbidden.
+    """
+    group_value = str(
+        group_value or ""
+    ).strip()
+
+    if not group_value:
+        raise WorkflowDEGVolcanoPathError(
+            "Missing required parameter: group_value."
+        )
+
+    if "\x00" in group_value:
+        raise WorkflowDEGVolcanoPathError(
+            "Invalid group_value parameter."
+        )
+
+    if (
+        "/" in group_value
+        or "\\" in group_value
+        or ".." in group_value
+    ):
+        raise WorkflowDEGVolcanoPathError(
+            "Invalid group_value parameter."
+        )
+
+    return group_value
+
+
+def validate_scst_deg_scope(
+    deg_scope: str,
+) -> str:
+    """
+    Validate an SC/ST DEG scope.
+    """
+    deg_scope = str(
+        deg_scope or SCST_WORKFLOW_DEG_SCOPE_ALL
+    ).strip()
+
+    if deg_scope not in SCST_WORKFLOW_DEG_SCOPES:
+        raise WorkflowDEGVolcanoPathError(
+            "Invalid SC/ST DEG scope. "
+            "Allowed values are: "
+            f"{', '.join(SCST_WORKFLOW_DEG_SCOPES)}."
+        )
+
+    return deg_scope
+
+
+def get_scst_workflow_deg_filename(
+    *,
+    task_name: str,
+    group_value: str,
+    rna_type: str = "mRNA",
+    deg_scope: str = SCST_WORKFLOW_DEG_SCOPE_ALL,
+) -> str:
+    """
+    Build an SC/ST Hybrid Reference DEG filename.
+
+    all:
+        {task_name}_deg_{group_value}.csv
+
+    intersect:
+        {dataset}_mRNA_deg_{group_value}_intersect.csv
+    """
+    task_name = str(
+        task_name or ""
+    ).strip()
+
+    rna_type = str(
+        rna_type or ""
+    ).strip()
+
+    validate_safe_name(
+        task_name,
+        "task_name",
+    )
+
+    validate_safe_name(
+        rna_type,
+        "rna_type",
+    )
+
+    group_value = validate_scst_deg_group_value(
+        group_value
+    )
+
+    deg_scope = validate_scst_deg_scope(
+        deg_scope
+    )
+
+    if rna_type not in SCST_WORKFLOW_DEG_RNA_TYPES:
+        raise WorkflowDEGVolcanoPathError(
+            f"Unsupported SC/ST DEG RNA type: {rna_type}."
+        )
+
+    if deg_scope == SCST_WORKFLOW_DEG_SCOPE_ALL:
+        return SCST_WORKFLOW_DEG_FILENAME_TEMPLATE.format(
+            task_name=task_name,
+            group_value=group_value,
+        )
+
+    return (
+        SCST_WORKFLOW_DEG_INTERSECT_FILENAME_TEMPLATE.format(
+            task_name=task_name,
+            group_value=group_value,
+        )
+    )
+
+
+def get_scst_workflow_deg_file_path(
+    *,
+    task,
+    group_value: str,
+    rna_type: str = "mRNA",
+    deg_scope: str = SCST_WORKFLOW_DEG_SCOPE_ALL,
+) -> Path:
+    """
+    Return the SC/ST DEG file path for one group and scope.
+    """
+    output_dir = get_workflow_task_output_dir(
+        task
+    )
+
+    filename = get_scst_workflow_deg_filename(
+        task_name=task.task_name,
+        group_value=group_value,
+        rna_type=rna_type,
+        deg_scope=deg_scope,
+    )
+
+    file_path = (
+        output_dir / filename
+    ).resolve()
+
+    try:
+        file_path.relative_to(output_dir)
+    except ValueError as exc:
+        raise WorkflowDEGVolcanoPathError(
+            "Invalid SC/ST workflow DEG file path."
+        ) from exc
+
+    return file_path
+
+
+def validate_scst_workflow_deg_file(
+    *,
+    task,
+    group_value: str,
+    rna_type: str = "mRNA",
+    deg_scope: str = SCST_WORKFLOW_DEG_SCOPE_ALL,
+) -> Path:
+    """
+    Validate that an SC/ST DEG result file exists.
+    """
+    file_path = get_scst_workflow_deg_file_path(
+        task=task,
+        group_value=group_value,
+        rna_type=rna_type,
+        deg_scope=deg_scope,
+    )
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            f"SC/ST DEG file not found: {file_path.name}."
+        )
+
+    return file_path
+
+
+def read_scst_workflow_deg_file(
+    *,
+    task,
+    group_value: str,
+    rna_type: str = "mRNA",
+    deg_scope: str = SCST_WORKFLOW_DEG_SCOPE_ALL,
+) -> tuple[Path, pd.DataFrame]:
+    """
+    Read one SC/ST DEG result file.
+    """
+    file_path = validate_scst_workflow_deg_file(
+        task=task,
+        group_value=group_value,
+        rna_type=rna_type,
+        deg_scope=deg_scope,
+    )
+
+    return read_deg_file_by_path(
+        file_path
+    )
+
+
+def get_scst_workflow_available_deg_rna_types(
+    *,
+    task,
+    group_value: str,
+    valid_rna_types: list[str] | None = None,
+    deg_scope: str = SCST_WORKFLOW_DEG_SCOPE_ALL,
+) -> list[str]:
+    """
+    Return available DEG RNA types for one SC/ST group and scope.
+
+    The current SC/ST workflow supports only mRNA.
+    """
+    valid_rna_types = (
+        valid_rna_types
+        or SCST_WORKFLOW_DEG_RNA_TYPES
+    )
+
+    try:
+        deg_scope = validate_scst_deg_scope(
+            deg_scope
+        )
+    except WorkflowDEGVolcanoPathError:
+        return []
+
+    output_dir = get_workflow_task_output_dir(
+        task
+    )
+
+    if not output_dir.exists() or not output_dir.is_dir():
+        return []
+
+    available_rna_types = []
+
+    for rna_type in valid_rna_types:
+        try:
+            file_path = get_scst_workflow_deg_file_path(
+                task=task,
+                group_value=group_value,
+                rna_type=rna_type,
+                deg_scope=deg_scope,
+            )
+        except WorkflowDEGVolcanoPathError:
+            continue
+
+        if file_path.exists() and file_path.is_file():
+            available_rna_types.append(
+                rna_type
+            )
+
+    return available_rna_types
+
+
+def get_scst_workflow_available_deg_scopes(
+    *,
+    task,
+    group_value: str,
+    rna_type: str = "mRNA",
+    valid_scopes: list[str] | None = None,
+) -> list[str]:
+    """
+    Return available DEG scopes for one SC/ST group.
+
+    Possible scopes:
+        all
+        intersect
+    """
+    valid_scopes = (
+        valid_scopes
+        or SCST_WORKFLOW_DEG_SCOPES
+    )
+
+    output_dir = get_workflow_task_output_dir(
+        task
+    )
+
+    if not output_dir.exists() or not output_dir.is_dir():
+        return []
+
+    available_scopes = []
+
+    for deg_scope in valid_scopes:
+        try:
+            file_path = get_scst_workflow_deg_file_path(
+                task=task,
+                group_value=group_value,
+                rna_type=rna_type,
+                deg_scope=deg_scope,
+            )
+        except WorkflowDEGVolcanoPathError:
+            continue
+
+        if file_path.exists() and file_path.is_file():
+            available_scopes.append(
+                deg_scope
+            )
+
+    return available_scopes
+
+
+def get_scst_workflow_deg_availability(
+    *,
+    task,
+    group_values: list[str],
+    valid_rna_types: list[str] | None = None,
+    valid_scopes: list[str] | None = None,
+) -> list[dict]:
+    """
+    Return DEG availability information for every SC/ST group.
+
+    Each group reports:
+    - Available RNA types
+    - Available scopes
+    - File information for all and intersect scopes
+    """
+    valid_rna_types = (
+        valid_rna_types
+        or SCST_WORKFLOW_DEG_RNA_TYPES
+    )
+
+    valid_scopes = (
+        valid_scopes
+        or SCST_WORKFLOW_DEG_SCOPES
+    )
+
+    results = []
+
+    for raw_group_value in group_values:
+        group_value = str(
+            raw_group_value or ""
+        ).strip()
+
+        if not group_value:
+            continue
+
+        available_scopes = (
+            get_scst_workflow_available_deg_scopes(
+                task=task,
+                group_value=group_value,
+                rna_type="mRNA",
+                valid_scopes=valid_scopes,
+            )
+        )
+
+        # available_deg_rna_types 表示至少存在一个可用 DEG scope
+        # 时，对应 RNA type 可以用于 DEG 可视化。
+        available_rna_types = []
+
+        for rna_type in valid_rna_types:
+            rna_type_available = any(
+                rna_type in (
+                    get_scst_workflow_available_deg_rna_types(
+                        task=task,
+                        group_value=group_value,
+                        valid_rna_types=[rna_type],
+                        deg_scope=deg_scope,
+                    )
+                )
+                for deg_scope in valid_scopes
+            )
+
+            if rna_type_available:
+                available_rna_types.append(
+                    rna_type
+                )
+
+        deg_files = {}
+
+        for deg_scope in valid_scopes:
+            try:
+                file_path = get_scst_workflow_deg_file_path(
+                    task=task,
+                    group_value=group_value,
+                    rna_type="mRNA",
+                    deg_scope=deg_scope,
+                )
+
+                file_exists = (
+                    file_path.exists()
+                    and file_path.is_file()
+                )
+
+                deg_files[deg_scope] = {
+                    "file": (
+                        file_path.name
+                        if file_exists
+                        else None
+                    ),
+                    "exists": file_exists,
+                }
+
+            except WorkflowDEGVolcanoPathError:
+                deg_files[deg_scope] = {
+                    "file": None,
+                    "exists": False,
+                }
+
+        results.append(
+            {
+                "group_value": group_value,
+                "deg_available": bool(
+                    available_rna_types
+                ),
+                "available_deg_rna_types": (
+                    available_rna_types
+                ),
+                "available_deg_scopes": (
+                    available_scopes
+                ),
+                "deg_files": deg_files,
+            }
+        )
+
+    return results

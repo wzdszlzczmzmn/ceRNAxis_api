@@ -40,6 +40,15 @@ HYBRID_REFERENCE_VALID_BACKGROUND_TYPES = [
     "miRNA-lncRNA",
 ]
 
+SCST_HYBRID_REFERENCE_LOG2FC_BACKGROUND_FILENAME_TEMPLATE = (
+    "{task_name}_ceRNA_{group_value}_background.csv"
+)
+
+SCST_HYBRID_REFERENCE_VALID_BACKGROUND_TYPES = [
+    "miRNA-mRNA",
+    "miRNA-lncRNA",
+]
+
 WORKFLOW_LOG2FC_X_COL = "ceRNA_log2FC"
 WORKFLOW_LOG2FC_Y_COL = "miRNA_log2FC"
 
@@ -352,3 +361,230 @@ def build_log2fc_correlation_response_data_from_dataframe(
         }
 
     return response_data
+
+
+def validate_scst_background_group_value(
+    group_value: str,
+) -> str:
+    """
+    Validate and normalize an SC/ST group value used in a
+    background result filename.
+
+    Spaces, brackets, plus signs and similar label characters are
+    allowed. Path separators and traversal sequences are forbidden.
+    """
+    group_value = str(group_value or "").strip()
+
+    if not group_value:
+        raise WorkflowLog2FCBackgroundPathError(
+            "Missing required parameter: group_value."
+        )
+
+    if "\x00" in group_value:
+        raise WorkflowLog2FCBackgroundPathError(
+            "Invalid group_value parameter."
+        )
+
+    if (
+        "/" in group_value
+        or "\\" in group_value
+        or ".." in group_value
+    ):
+        raise WorkflowLog2FCBackgroundPathError(
+            "Invalid group_value parameter."
+        )
+
+    return group_value
+
+
+def get_scst_workflow_log2fc_background_file_path(
+    task,
+    group_value: str,
+) -> Path:
+    """
+    Return the SC/ST background file path for one group value.
+
+    Filename:
+        {task_name}_ceRNA_{group_value}_background.csv
+    """
+    task_name = str(
+        getattr(task, "task_name", "") or ""
+    ).strip()
+
+    validate_safe_name(
+        task_name,
+        "task_name",
+    )
+
+    group_value = validate_scst_background_group_value(
+        group_value
+    )
+
+    output_dir = get_workflow_task_output_dir(task)
+
+    filename = (
+        SCST_HYBRID_REFERENCE_LOG2FC_BACKGROUND_FILENAME_TEMPLATE
+        .format(
+            task_name=task_name,
+            group_value=group_value,
+        )
+    )
+
+    file_path = (
+        output_dir / filename
+    ).resolve()
+
+    try:
+        file_path.relative_to(output_dir)
+    except ValueError as exc:
+        raise WorkflowLog2FCBackgroundPathError(
+            "Invalid SC/ST ceRNA background file path."
+        ) from exc
+
+    return file_path
+
+
+def validate_scst_workflow_log2fc_background_file(
+    task,
+    group_value: str,
+) -> Path:
+    file_path = (
+        get_scst_workflow_log2fc_background_file_path(
+            task=task,
+            group_value=group_value,
+        )
+    )
+
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(
+            "SC/ST ceRNA background file not found: "
+            f"{file_path.name}"
+        )
+
+    return file_path
+
+
+def read_scst_workflow_log2fc_background_file(
+    task,
+    group_value: str,
+) -> tuple[Path, pd.DataFrame]:
+    file_path = (
+        validate_scst_workflow_log2fc_background_file(
+            task=task,
+            group_value=group_value,
+        )
+    )
+
+    return read_log2fc_background_file_by_path(
+        file_path
+    )
+
+
+def get_available_scst_workflow_log2fc_background_types(
+    task,
+    group_value: str,
+    valid_types: list[str] | None = None,
+) -> list[str]:
+    """
+    Return available background types for one SC/ST group.
+
+    Missing or invalid result files are treated as unavailable and
+    therefore return an empty list.
+    """
+    valid_types = (
+        valid_types
+        or SCST_HYBRID_REFERENCE_VALID_BACKGROUND_TYPES
+    )
+
+    try:
+        _, df = (
+            read_scst_workflow_log2fc_background_file(
+                task=task,
+                group_value=group_value,
+            )
+        )
+    except (
+        FileNotFoundError,
+        WorkflowLog2FCBackgroundPathError,
+        WorkflowLog2FCBackgroundInputError,
+    ):
+        return []
+
+    return get_workflow_available_background_types(
+        df=df,
+        valid_types=valid_types,
+    )
+
+
+def get_scst_workflow_background_availability(
+    task,
+    group_values: list[str],
+    valid_types: list[str] | None = None,
+) -> list[dict]:
+    """
+    Return background availability information for all SC/ST groups.
+
+    The returned order follows group_values.
+    """
+    valid_types = (
+        valid_types
+        or SCST_HYBRID_REFERENCE_VALID_BACKGROUND_TYPES
+    )
+
+    results = []
+
+    for raw_group_value in group_values:
+        group_value = str(
+            raw_group_value or ""
+        ).strip()
+
+        if not group_value:
+            continue
+
+        try:
+            file_path = (
+                get_scst_workflow_log2fc_background_file_path(
+                    task=task,
+                    group_value=group_value,
+                )
+            )
+
+            file_exists = (
+                file_path.exists()
+                and file_path.is_file()
+            )
+
+            if file_exists:
+                available_types = (
+                    get_available_scst_workflow_log2fc_background_types(
+                        task=task,
+                        group_value=group_value,
+                        valid_types=valid_types,
+                    )
+                )
+                background_file = file_path.name
+            else:
+                available_types = []
+                background_file = None
+
+        except WorkflowLog2FCBackgroundPathError:
+            file_exists = False
+            available_types = []
+            background_file = None
+
+        results.append(
+            {
+                "group_value": group_value,
+                "background_file": background_file,
+                "background_file_exists": file_exists,
+                "background_available": bool(
+                    file_exists
+                    and available_types
+                ),
+                "available_background_types": (
+                    available_types
+                ),
+            }
+        )
+
+    return results

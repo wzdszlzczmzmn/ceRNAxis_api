@@ -272,22 +272,6 @@ def format_hybrid_reference_task(task, position=0) -> dict:
 
 def format_scst_hybrid_reference_task(task, position=0) -> dict:
     """Format SC/ST hybrid-reference tasks for the unified task query API."""
-    # available_background_types = get_available_workflow_log2fc_background_types(
-    #     task=task,
-    #     valid_types=HYBRID_REFERENCE_VALID_BACKGROUND_TYPES,
-    # )
-    #
-    # available_deg_rna_types = get_workflow_available_deg_rna_types(
-    #     task=task,
-    #     valid_rna_types=WORKFLOW_DEG_HYBRID_REFERENCE_RNA_TYPES,
-    # )
-    #
-    # available_deg_scopes = get_workflow_available_deg_scopes(
-    #     task=task,
-    #     rna_type="mRNA",
-    #     valid_scopes=WORKFLOW_DEG_HYBRID_REFERENCE_SCOPES,
-    # )
-
     exp_file = getattr(task, "exp_file", "") or ""
     meta_file = getattr(task, "meta_file", "") or ""
 
@@ -324,8 +308,4 @@ def format_scst_hybrid_reference_task(task, position=0) -> dict:
                 "pvalue_cutoff": task.padj_cutoff_mrna,
             },
         },
-
-        # "available_deg_rna_types": available_deg_rna_types,
-        # "available_deg_scopes": available_deg_scopes,
-        # "available_background_types": available_background_types,
     }

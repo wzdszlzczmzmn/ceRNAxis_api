@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from analysis.models import PairedCohortTask, HybridReferenceTask
+from analysis.models import PairedCohortTask, HybridReferenceTask, SCSTHybridReferenceTask
 from analysis.utils.paired_cohort_task_utils import (
     PairedCohortTaskInputError,
     PairedCohortTaskPathError,
@@ -14,8 +14,11 @@ from analysis.utils.paired_cohort_task_utils import (
 from analysis.utils.hybrid_reference_task_utils import (
     HybridReferenceTaskInputError,
     HybridReferenceTaskPathError,
-    build_hybrid_reference_deg_pathway_data,
+    build_hybrid_reference_deg_pathway_data, SCSTHybridReferenceTaskPathError, SCSTHybridReferenceTaskInputError,
+    build_scst_hybrid_reference_deg_pathway_data,
 )
+from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import WorkflowVizInfoPathError, \
+    WorkflowVizInfoInputError, validate_scst_hybrid_reference_group_value
 
 
 class BaseWorkflowDEGPathwayView(APIView):
@@ -31,6 +34,19 @@ class BaseWorkflowDEGPathwayView(APIView):
 
     def get_status_success_value(self):
         return self.task_model.Status.Success
+
+    def build_result(
+            self,
+            *,
+            request,
+            task,
+    ) -> dict:
+        if self.build_result_func is None:
+            raise RuntimeError(
+                "Missing build_result_func."
+            )
+
+        return self.build_result_func(task)
 
     def get(self, request):
         try:
@@ -78,7 +94,10 @@ class BaseWorkflowDEGPathwayView(APIView):
                 )
 
             try:
-                result = self.build_result_func(task)
+                result = self.build_result(
+                    request=request,
+                    task=task,
+                )
             except self.path_error_classes as e:
                 return Response(
                     {
@@ -150,3 +169,61 @@ class HybridReferenceDEGPathwayView(BaseWorkflowDEGPathwayView):
     build_result_func = staticmethod(build_hybrid_reference_deg_pathway_data)
     path_error_classes = (HybridReferenceTaskPathError,)
     input_error_classes = (HybridReferenceTaskInputError,)
+
+
+class SCSTHybridReferenceDEGPathwayView(
+    BaseWorkflowDEGPathwayView
+):
+    """
+    Return DEG pathway enrichment data
+    for SCSTHybridReferenceTask.
+
+    Query params:
+        taskUUID
+        groupValue
+
+    Input file:
+        {task_name}_mRNA_gsea_{groupValue}.csv
+    """
+
+    task_model = SCSTHybridReferenceTask
+    task_label = "SCSTHybridReferenceTask"
+    not_success_message = "SC/ST hybrid reference task is not completed successfully."
+    path_error_classes = (
+        SCSTHybridReferenceTaskPathError,
+        WorkflowVizInfoPathError,
+    )
+    input_error_classes = (
+        SCSTHybridReferenceTaskInputError,
+        WorkflowVizInfoInputError,
+    )
+
+    def build_result(
+        self,
+        *,
+        request,
+        task,
+    ) -> dict:
+        group_value = str(
+            request.query_params.get(
+                "groupValue",
+                "",
+            )
+        ).strip()
+
+        if not group_value:
+            raise WorkflowVizInfoInputError(
+                "Missing query parameter: groupValue."
+            )
+
+        group_value = (
+            validate_scst_hybrid_reference_group_value(
+                task=task,
+                group_value=group_value,
+            )
+        )
+
+        return build_scst_hybrid_reference_deg_pathway_data(
+            task=task,
+            group_value=group_value,
+        )

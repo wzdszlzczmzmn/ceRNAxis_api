@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from analysis.models import (
     CustomListQueryTask,
     PairedCohortTask,
-    HybridReferenceTask,
+    HybridReferenceTask, SCSTHybridReferenceTask,
 )
 
 from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
@@ -38,6 +38,11 @@ WORKFLOW_CM_SCORE_TASK_CONFIG = {
         "model": HybridReferenceTask,
         "label": "Hybrid reference task",
     },
+    "SCSTHybridReferenceTask": {
+        "model": SCSTHybridReferenceTask,
+        "label": "SC/ST hybrid reference task",
+        "require_group_value": True,
+    },
 }
 
 
@@ -61,6 +66,38 @@ def get_required_task_type(request) -> str:
         )
 
     return task_type
+
+
+def get_optional_group_value(
+    request,
+    *,
+    required=False,
+) -> str | None:
+    group_value = str(
+        request.query_params.get(
+            "groupValue",
+            "",
+        )
+    ).strip()
+
+    if required and not group_value:
+        raise WorkflowCMScoreInputError(
+            "Missing required query parameter: groupValue."
+        )
+
+    if not group_value:
+        return None
+
+    if (
+        "/" in group_value
+        or "\\" in group_value
+        or ".." in group_value
+    ):
+        raise WorkflowCMScoreInputError(
+            "Invalid groupValue parameter."
+        )
+
+    return group_value
 
 
 class WorkflowCMScoreOptionsView(APIView):
@@ -123,10 +160,23 @@ class WorkflowCMScoreOptionsView(APIView):
                 task_label=task_config["label"],
             )
 
+            group_value = (
+                get_optional_group_value(
+                    request,
+                    required=True,
+                )
+                if task_config.get(
+                    "require_group_value",
+                    False,
+                )
+                else None
+            )
+
             response_data = (
                 build_workflow_cm_score_options_response(
                     task=task,
                     task_type=task_type,
+                    group_value=group_value,
                 )
             )
 
@@ -231,10 +281,23 @@ class WorkflowCMScoreResultView(APIView):
                 task_label=task_config["label"],
             )
 
+            group_value = (
+                get_optional_group_value(
+                    request,
+                    required=True,
+                )
+                if task_config.get(
+                    "require_group_value",
+                    False,
+                )
+                else None
+            )
+
             file_path, dataframe = (
                 read_workflow_cm_score_file(
                     task=task,
                     item_value=item_value,
+                    group_value=group_value,
                 )
             )
 
@@ -245,6 +308,7 @@ class WorkflowCMScoreResultView(APIView):
                     item_value=item_value,
                     file_path=file_path,
                     dataframe=dataframe,
+                    group_value=group_value,
                 )
             )
 

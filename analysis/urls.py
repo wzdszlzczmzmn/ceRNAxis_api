@@ -5,7 +5,7 @@ from analysis.views import workflow_views, workflow_submit_views, workflow_query
 from analysis.views.workflow_detail_each_views import workflow_uploaded_file_views, workflow_network_views, \
     workflow_axis_final_views, workflow_cmap_views, workflow_log2fc_correlation_views, workflow_deg_volcano_views, \
     workflow_exp_correlation_views, workflow_survival_views, workflow_deg_pathway_views, workflow_enrichr_views, \
-    workflow_cm_score_views, workflow_sponge_views
+    workflow_cm_score_views, workflow_sponge_views, workflow_viz_info_views
 
 urlpatterns = [
     # Immune Annotation Views
@@ -36,6 +36,12 @@ urlpatterns = [
          name='paired_cohort_task_network'),
     path('hybrid_reference_task_network/', workflow_network_views.HybridReferenceTaskNetworkView.as_view(),
          name='hybrid_reference_task_network'),
+    path("scst_hybrid_reference_task_network/", workflow_network_views.SCSTHybridReferenceTaskNetworkView.as_view(),
+         name="scst_hybrid_reference_network"),
+
+    # Workflow Viz Info Views
+    path('scst_hybrid_reference_viz_info/', workflow_viz_info_views.SCSTHybridReferenceVizInfoView.as_view(),
+         name='scst_hybrid_reference_viz_info'),
 
     # Uploaded File Download Views
     path('paired_cohort_uploaded_file_download/',
@@ -45,12 +51,18 @@ urlpatterns = [
          workflow_uploaded_file_views.HybridReferenceUploadedFileDownloadView.as_view(),
          name='hybrid_reference_uploaded_file_download'
          ),
+    path("scst_hybrid_reference_uploaded_file_download/",
+         workflow_uploaded_file_views.SCSTHybridReferenceUploadedFileDownloadView.as_view(),
+         name="scst_hybrid_reference_uploaded_file",
+         ),
 
     # DEG Volcano Views
     path('paired_cohort_deg_volcano/', workflow_deg_volcano_views.PairedCohortDEGVolcanoView.as_view(),
          name='paired_cohort_deg_volcano'),
     path('hybrid_reference_deg_volcano/', workflow_deg_volcano_views.HybridReferenceDEGVolcanoView.as_view(),
          name='hybrid_reference_deg_volcano'),
+    path("scst_hybrid_reference_deg_volcano/", workflow_deg_volcano_views.SCSTHybridReferenceDEGVolcanoView.as_view(),
+         name="scst_hybrid_reference_deg_volcano"),
 
     # Log2FC Correlation Views
     path('paired_cohort_correlation/', workflow_log2fc_correlation_views.PairedCohortLog2FCCorrelationView.as_view(),
@@ -58,6 +70,9 @@ urlpatterns = [
     path('hybrid_reference_correlation/',
          workflow_log2fc_correlation_views.HybridReferenceLog2FCCorrelationView.as_view(),
          name='hybrid_reference_correlation'),
+    path('scst_hybrid_reference_correlation/',
+         workflow_log2fc_correlation_views.SCSTHybridReferenceLog2FCCorrelationView.as_view(),
+         name='scst_hybrid_reference_correlation'),
 
     # Exp Correlation Views
     path('paired_cohort_exp_correlation_options/',
@@ -72,6 +87,12 @@ urlpatterns = [
     path('hybrid_reference_exp_correlation_plot_data/',
          workflow_exp_correlation_views.HybridReferenceExpCorrelationPlotDataView.as_view(),
          name='hybrid_reference_exp_correlation_plot_data'),
+    path("scst_hybrid_reference_exp_correlation_options/",
+         workflow_exp_correlation_views.SCSTHybridReferenceExpCorrelationOptionsView.as_view(),
+         name="scst_hybrid_reference_exp_correlation_options"),
+    path("scst_hybrid_reference_exp_correlation_plot_data/",
+         workflow_exp_correlation_views.SCSTHybridReferenceExpCorrelationPlotDataView.as_view(),
+         name="scst_hybrid_reference_exp_correlation_plot_data"),
 
     # Task Demo
     path('paired_cohort_demo_info/', workflow_demo_view.PairedCohortDemoInfoView.as_view(),
@@ -115,18 +136,24 @@ urlpatterns = [
          name='paired_cohort_axis_final'),
     path('hybrid_reference_axis_final/', workflow_axis_final_views.HybridReferenceAxisFinalDataView.as_view(),
          name='hybrid_reference_axis_final'),
+    path("scst_hybrid_reference_axis_final/", workflow_axis_final_views.SCSTHybridReferenceAxisFinalDataView.as_view(),
+         name="scst_hybrid_reference_axis_final"),
 
     # Survival Views
     path('paired_cohort_survival_km/', workflow_survival_views.PairedCohortSurvivalKMDataView.as_view(),
          name='paired_cohort_survival_km'),
     path('hybrid_reference_survival_km/', workflow_survival_views.HybridReferenceSurvivalKMDataView.as_view(),
          name='hybrid_reference_survival_km'),
+    path('scst_hybrid_reference_survival_km/', workflow_survival_views.SCSTHybridReferenceSurvivalKMDataView.as_view(),
+         name='scst_hybrid_reference_survival_km'),
 
     # DEG Pathway Views
     path('paired_cohort_deg_pathway/', workflow_deg_pathway_views.PairedCohortDEGPathwayView.as_view(),
          name='paired_cohort_deg_pathway'),
     path('hybrid_reference_deg_pathway/', workflow_deg_pathway_views.HybridReferenceDEGPathwayView.as_view(),
          name='hybrid_reference_deg_pathway'),
+    path('scst_hybrid_reference_deg_pathway/', workflow_deg_pathway_views.SCSTHybridReferenceDEGPathwayView.as_view(),
+         name='scst_hybrid_reference_deg_pathway'),
 
     # CMap Views
     path('custom_list_query_cmap_result/', workflow_cmap_views.CustomListQueryCMapResultView.as_view(),
@@ -135,6 +162,8 @@ urlpatterns = [
          name='paired_cohort_cmap_result'),
     path('hybrid_reference_cmap_result/', workflow_cmap_views.HybridReferenceCMapResultView.as_view(),
          name='hybrid_reference_cmap_result'),
+    path("scst_hybrid_reference_cmap_result/", workflow_cmap_views.SCSTHybridReferenceCMapResultView.as_view(),
+         name="scst_hybrid_reference_cmap_result"),
 
     # Enrichr Views
     path('custom_list_query_enrichr_result/', workflow_enrichr_views.CustomListQueryEnrichrResultView.as_view(),

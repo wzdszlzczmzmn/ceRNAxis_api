@@ -22,6 +22,20 @@ HYBRID_REFERENCE_CMAP_REQUIRED_COLUMNS = set(
 )
 
 
+SCST_HYBRID_REFERENCE_CMAP_COLUMNS = [
+    "c_perturbation",
+    "c_perturbation_name",
+    "c_perturbation_type",
+    "n_tau",
+    "c_cell_line",
+    "n_perturbation_size",
+]
+
+SCST_HYBRID_REFERENCE_CMAP_REQUIRED_COLUMNS = set(
+    SCST_HYBRID_REFERENCE_CMAP_COLUMNS
+)
+
+
 class WorkflowCMapInputError(ValueError):
     pass
 
@@ -62,6 +76,40 @@ def get_workflow_cmap_file_path(task) -> Path:
     if not str(file_path).startswith(str(output_dir)):
         raise WorkflowCMapPathError(
             "Invalid workflow CMap result file path."
+        )
+
+    return file_path
+
+
+def get_scst_hybrid_reference_cmap_file_path(
+    task,
+    group_value: str,
+) -> Path:
+    task_name = str(task.task_name).strip()
+
+    validate_safe_name(
+        task_name,
+        "task_name",
+    )
+
+    validate_safe_name(
+        group_value,
+        "group_value",
+    )
+
+    output_dir = get_workflow_task_output_dir(task)
+
+    file_path = (
+        output_dir
+        /
+        f"{task_name}_CMap_{group_value}.csv"
+    ).resolve()
+
+    if not str(file_path).startswith(
+        str(output_dir)
+    ):
+        raise WorkflowCMapPathError(
+            "Invalid SCST hybrid reference CMap result file path."
         )
 
     return file_path
@@ -163,6 +211,22 @@ def read_workflow_cmap_file(
     required_columns: set[str] | list[str] | None = None,
 ) -> tuple[Path, pd.DataFrame]:
     file_path = validate_workflow_cmap_file(task)
+
+    return read_cmap_file_by_path(
+        file_path=file_path,
+        required_columns=required_columns,
+    )
+
+
+def read_scst_hybrid_reference_cmap_file(
+    task,
+    group_value: str,
+    required_columns=None,
+):
+    file_path = get_scst_hybrid_reference_cmap_file_path(
+        task=task,
+        group_value=group_value,
+    )
 
     return read_cmap_file_by_path(
         file_path=file_path,
