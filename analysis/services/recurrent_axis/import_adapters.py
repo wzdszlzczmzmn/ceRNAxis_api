@@ -70,18 +70,57 @@ class BaseAxisResultAdapter(ABC):
     ) -> None:
         pass
 
+    def get_empty_result_columns(self) -> list[str]:
+        """
+        Return a complete synthetic schema for a valid zero-row result.
+
+        Some upstream workflows use a zero-byte file to mean that the
+        analysis completed successfully but produced no Axis rows. The
+        importer converts that representation into an empty DataFrame with
+        the adapter's expected columns, allowing the file to be persisted as
+        an active artifact with row_count=0.
+        """
+        return sorted(
+            BASE_COLUMNS
+            | self.required_columns
+            | self.optional_columns
+            | self.evidence_columns
+        )
+
     def read_dataframe(
         self,
         file_path: Path,
     ) -> pd.DataFrame:
         try:
+            file_size = file_path.stat().st_size
+        except OSError as exc:
+            raise AxisImportValidationError(
+                f"Unable to inspect CSV file: {file_path}"
+            ) from exc
+
+        if file_size == 0:
+            return pd.DataFrame(
+                columns=self.get_empty_result_columns(),
+                dtype=object,
+            )
+
+        try:
             df = pd.read_csv(
                 file_path,
                 dtype=object,
             )
+        except pd.errors.EmptyDataError as exc:
+            raise AxisImportValidationError(
+                "CSV file contains no parseable header: "
+                f"{file_path}. "
+                "A zero-byte file is supported as an explicit zero-row "
+                "result, but a non-zero blank or whitespace-only file is "
+                "invalid."
+            ) from exc
         except Exception as exc:
             raise AxisImportValidationError(
-                f"Unable to read CSV file: {file_path}"
+                f"Unable to read CSV file: {file_path}. "
+                f"Cause: {type(exc).__name__}: {exc}"
             ) from exc
 
         columns = [
