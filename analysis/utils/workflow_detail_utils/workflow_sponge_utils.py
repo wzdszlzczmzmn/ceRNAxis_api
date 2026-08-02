@@ -2,6 +2,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from analysis.services.recurrent_axis.project_match import (
+    MATCH_SCOPE_SPONGE,
+    enrich_axis_final_response_with_project_matches,
+)
+
 
 WORKFLOW_SPONGE_FILENAME_SUFFIX = "_sponge_result.csv"
 
@@ -384,6 +389,9 @@ def build_sponge_response_from_dataframe(
     required_columns: list[str] | set[str] | None = None,
     numeric_columns: set[str] | None = None,
     base_response: dict | None = None,
+    include_project_matches: bool | None = None,
+    max_matches_per_axis: int | None = None,
+    project_match_scope: str = MATCH_SCOPE_SPONGE,
 ) -> dict:
     """
     Normalize and serialize a Sponge dataframe into an API response.
@@ -434,4 +442,41 @@ def build_sponge_response_from_dataframe(
             **response_data,
         }
 
+    if include_project_matches is True:
+        return enrich_workflow_sponge_response_with_project_matches(
+            response_data=response_data,
+            max_matches_per_axis=max_matches_per_axis,
+            project_match_scope=project_match_scope,
+        )
+
+    if include_project_matches is False:
+        response_data = {
+            **response_data,
+            "axis_reference_match_enabled": False,
+            "axis_project_match_enabled": False,
+        }
+
     return response_data
+
+
+def enrich_workflow_sponge_response_with_project_matches(
+    *,
+    response_data: dict,
+    max_matches_per_axis: int | None = None,
+    project_match_scope: str = MATCH_SCOPE_SPONGE,
+) -> dict:
+    """
+    Add recurrent-reference Context matches to a workflow Sponge response.
+
+    Database matching remains isolated in:
+        analysis.services.recurrent_axis.project_match
+
+    Although the service entry point retains the historical
+    ``axis_final`` name for compatibility, it accepts generic Axis records
+    and uses ``match_scope='sponge'`` here.
+    """
+    return enrich_axis_final_response_with_project_matches(
+        response_data=response_data,
+        max_matches_per_axis=max_matches_per_axis,
+        match_scope=project_match_scope,
+    )

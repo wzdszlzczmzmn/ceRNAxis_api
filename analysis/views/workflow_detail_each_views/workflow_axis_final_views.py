@@ -8,8 +8,6 @@ from analysis.models import (
     PairedCohortTask,
     HybridReferenceTask, SCSTHybridReferenceTask,
 )
-from analysis.services.axis_final import enrich_axis_final_response_with_project_matches
-
 from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
     WorkflowNetworkViewError,
     get_required_task_uuid,
@@ -168,18 +166,17 @@ class WorkflowAxisFinalDataBaseView(APIView):
                 required_columns=required_columns,
                 numeric_columns=self.axis_final_numeric_columns,
                 base_response=base_response,
+                include_project_matches=(
+                    self.should_include_project_matches(
+                        request
+                    )
+                ),
+                max_matches_per_axis=(
+                    self.get_max_matches_per_axis(
+                        request
+                    )
+                ),
             )
-
-            if self.should_include_project_matches(request):
-                response_data = enrich_axis_final_response_with_project_matches(
-                    response_data=response_data,
-                    max_matches_per_axis=self.get_max_matches_per_axis(request),
-                )
-            else:
-                response_data = {
-                    **response_data,
-                    "axis_project_match_enabled": False,
-                }
 
             return Response(
                 response_data,

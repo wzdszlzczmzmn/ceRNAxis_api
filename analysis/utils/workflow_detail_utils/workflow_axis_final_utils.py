@@ -2,6 +2,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from analysis.services.recurrent_axis.project_match import (
+    MATCH_SCOPE_AXIS_FINAL,
+    enrich_axis_final_response_with_project_matches,
+)
+
 
 WORKFLOW_AXIS_FINAL_FILENAME_SUFFIX = "_ceRNA_axis_final.csv"
 
@@ -259,6 +264,9 @@ def build_axis_final_response_from_dataframe(
     required_columns: list[str] | set[str] | None = None,
     numeric_columns: set[str] | None = None,
     base_response: dict | None = None,
+    include_project_matches: bool | None = None,
+    max_matches_per_axis: int | None = None,
+    project_match_scope: str = MATCH_SCOPE_AXIS_FINAL,
 ) -> dict:
     numeric_columns = numeric_columns or WORKFLOW_AXIS_FINAL_NUMERIC_COLUMNS
     required_columns = required_columns or WORKFLOW_AXIS_FINAL_CORE_COLUMNS
@@ -296,7 +304,40 @@ def build_axis_final_response_from_dataframe(
             **response_data,
         }
 
+    if include_project_matches is True:
+        return enrich_workflow_axis_final_response_with_project_matches(
+            response_data=response_data,
+            max_matches_per_axis=max_matches_per_axis,
+            project_match_scope=project_match_scope,
+        )
+
+    if include_project_matches is False:
+        response_data = {
+            **response_data,
+            "axis_reference_match_enabled": False,
+            "axis_project_match_enabled": False,
+        }
+
     return response_data
+
+
+def enrich_workflow_axis_final_response_with_project_matches(
+    *,
+    response_data: dict,
+    max_matches_per_axis: int | None = None,
+    project_match_scope: str = MATCH_SCOPE_AXIS_FINAL,
+) -> dict:
+    """
+    Workflow-layer adapter for recurrent Axis project matching.
+
+    The database matching implementation remains isolated in:
+        analysis.services.recurrent_axis.project_match
+    """
+    return enrich_axis_final_response_with_project_matches(
+        response_data=response_data,
+        max_matches_per_axis=max_matches_per_axis,
+        match_scope=project_match_scope,
+    )
 
 
 def resolve_existing_axis_final_columns(

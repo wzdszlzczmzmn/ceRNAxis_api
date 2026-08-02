@@ -58,6 +58,66 @@ class WorkflowSpongeDataBaseView(APIView):
         """
         return {}
 
+    def should_include_project_matches(
+        self,
+        request,
+    ) -> bool:
+        """
+        Include recurrent-reference matches by default.
+
+        Use:
+            ?include_project_matches=false
+        to disable matching.
+        """
+        value = request.query_params.get(
+            "include_project_matches"
+        )
+
+        if value is None:
+            return True
+
+        return str(value).strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+
+    def get_max_matches_per_axis(
+        self,
+        request,
+    ) -> int | None:
+        value = request.query_params.get(
+            "max_matches_per_axis"
+        )
+
+        if value in {None, ""}:
+            return None
+
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return None
+
+        return value if value > 0 else None
+
+    def get_project_match_scope(
+        self,
+        request,
+    ) -> str:
+        """
+        Sponge results match Sponge reference contexts by default.
+
+        Supported by the recurrent Axis service:
+            sponge, both, any, axis_final
+        """
+        return str(
+            request.query_params.get(
+                "project_match_scope",
+                "sponge",
+            )
+        ).strip().lower()
+
     def get(self, request):
         try:
             self.validate_view_configuration()
@@ -129,6 +189,21 @@ class WorkflowSpongeDataBaseView(APIView):
                         self.sponge_numeric_columns
                     ),
                     base_response=base_response,
+                    include_project_matches=(
+                        self.should_include_project_matches(
+                            request
+                        )
+                    ),
+                    max_matches_per_axis=(
+                        self.get_max_matches_per_axis(
+                            request
+                        )
+                    ),
+                    project_match_scope=(
+                        self.get_project_match_scope(
+                            request
+                        )
+                    ),
                 )
             )
 
