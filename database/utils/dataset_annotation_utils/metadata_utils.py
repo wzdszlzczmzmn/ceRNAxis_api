@@ -20,8 +20,11 @@ from analysis.utils.workflow_detail_utils.workflow_deg_volcano_utils import (
 )
 
 from database.utils.dataset_annotation_utils.path_utils import (
+    build_dataset_annotation_visualization_availability,
+    build_timedb_group_by_candidates,
     get_dataset_annotation_deg_file_path,
     get_dataset_annotation_log2fc_background_file_path,
+    resolve_dataset_annotation_dir,
 )
 
 
@@ -167,6 +170,101 @@ def build_tcga_dataset_annotation_metadata(
     }
 
 
+def build_tcga_dataset_annotation_availability(
+    *,
+    annotation_dir: Path,
+    file_prefix: str,
+    deg_method: str = DEFAULT_DEG_METHOD,
+) -> dict:
+    """
+    Build TCGA annotation availability by visualization.
+
+    Overall ``available`` is based on whether at least one visualization is
+    usable, rather than whether the annotation directory merely exists.
+
+    Visualization-specific configuration is nested with the visualization
+    that consumes it:
+    - Volcano: DEG method, adjusted-p-value mode, cutoffs, RNA types and scopes.
+    - Log2FC correlation: available background interaction types.
+    """
+    metadata = build_tcga_dataset_annotation_metadata(
+        annotation_dir=annotation_dir,
+        file_prefix=file_prefix,
+        deg_method=deg_method,
+    )
+
+    file_availability = build_dataset_annotation_visualization_availability(
+        annotation_dir=annotation_dir,
+        file_prefix=file_prefix,
+    )["visualizations"]
+
+    available_deg_rna_types = metadata["available_deg_rna_types"]
+    available_deg_scopes = (
+        metadata["available_deg_scopes"]
+        if available_deg_rna_types
+        else []
+    )
+    available_background_types = metadata["available_background_types"]
+
+    visualizations = {
+        "annotation_network": {
+            "available": bool(
+                file_availability.get("annotation_network")
+            ),
+            "network_source_task_type": metadata[
+                "network_source_task_type"
+            ],
+        },
+        "axis_final": {
+            "available": bool(file_availability.get("axis_final")),
+        },
+        "cmap": {
+            "available": bool(file_availability.get("cmap")),
+        },
+        "volcano": {
+            "available": bool(available_deg_rna_types),
+            "deg_method": metadata["deg_method"],
+            "use_padj": metadata["use_padj"],
+            "cutoffs": metadata["cutoffs"],
+            "available_deg_rna_types": available_deg_rna_types,
+            "available_deg_scopes": available_deg_scopes,
+        },
+        "log2fc_correlation": {
+            "available": bool(available_background_types),
+            "available_background_types": available_background_types,
+        },
+        "exp_correlation": {
+            "available": bool(
+                file_availability.get("exp_correlation")
+            ),
+        },
+        "survival": {
+            "available": bool(file_availability.get("survival")),
+        },
+        "deg_pathway": {
+            "available": bool(file_availability.get("deg_pathway")),
+        },
+        "sponge": {
+            "available": bool(file_availability.get("sponge")),
+        },
+        "CMdrug": {
+            "available": bool(file_availability.get("CMdrug")),
+        },
+    }
+
+    available_visualization_count = sum(
+        1
+        for visualization in visualizations.values()
+        if visualization["available"]
+    )
+
+    return {
+        "available": available_visualization_count > 0,
+        "available_visualization_count": available_visualization_count,
+        "visualizations": visualizations,
+    }
+
+
 def build_timedb_dataset_annotation_metadata(
     *,
     annotation_dir: Path,
@@ -225,6 +323,142 @@ def build_timedb_dataset_annotation_metadata(
         "available_background_types": available_background_types,
     }
 
+
+def build_timedb_group_annotation_availability(
+    *,
+    annotation_dir: Path,
+    file_prefix: str,
+    deg_method: str = DEFAULT_DEG_METHOD,
+) -> dict:
+    """
+    Build visualization availability and visualization-specific configuration
+    for one TIMEDB group.
+    """
+    metadata = build_timedb_dataset_annotation_metadata(
+        annotation_dir=annotation_dir,
+        file_prefix=file_prefix,
+        deg_method=deg_method,
+    )
+
+    file_availability = build_dataset_annotation_visualization_availability(
+        annotation_dir=annotation_dir,
+        file_prefix=file_prefix,
+    )["visualizations"]
+
+    available_deg_rna_types = metadata["available_deg_rna_types"]
+    available_deg_scopes = metadata["available_deg_scopes"]
+    available_background_types = metadata["available_background_types"]
+
+    visualizations = {
+        "annotation_network": {
+            "available": bool(
+                file_availability.get("annotation_network")
+            ),
+            "network_source_task_type": metadata[
+                "network_source_task_type"
+            ],
+        },
+        "axis_final": {
+            "available": bool(file_availability.get("axis_final")),
+        },
+        "cmap": {
+            "available": bool(file_availability.get("cmap")),
+        },
+        "volcano": {
+            "available": bool(
+                available_deg_rna_types
+                and available_deg_scopes
+            ),
+            "deg_method": metadata["deg_method"],
+            "use_padj": metadata["use_padj"],
+            "cutoffs": metadata["cutoffs"],
+            "available_deg_rna_types": available_deg_rna_types,
+            "available_deg_scopes": available_deg_scopes,
+        },
+        "log2fc_correlation": {
+            "available": bool(available_background_types),
+            "available_background_types": available_background_types,
+        },
+        "exp_correlation": {
+            "available": bool(
+                file_availability.get("exp_correlation")
+            ),
+        },
+        "survival": {
+            "available": bool(file_availability.get("survival")),
+        },
+        "deg_pathway": {
+            "available": bool(file_availability.get("deg_pathway")),
+        },
+        "sponge": {
+            "available": bool(file_availability.get("sponge")),
+        },
+        "CMdrug": {
+            "available": bool(file_availability.get("CMdrug")),
+        },
+    }
+
+    available_visualization_count = sum(
+        1
+        for visualization in visualizations.values()
+        if visualization["available"]
+    )
+
+    return {
+        "available": available_visualization_count > 0,
+        "available_visualization_count": available_visualization_count,
+        "visualizations": visualizations,
+    }
+
+
+def build_timedb_dataset_annotation_availability(
+    *,
+    annotation_root_dir,
+    dataset_name: str,
+    deg_method: str = DEFAULT_DEG_METHOD,
+) -> dict:
+    """
+    Build TIMEDB availability for every usable group in one request.
+
+    Group candidates are ordered as other, grade and stage. The optional
+    ``other`` group is unique per dataset and uses the base dataset directory.
+    Internal directory names and file prefixes are not exposed to the client.
+    """
+    groups = []
+
+    for candidate in build_timedb_group_by_candidates(dataset_name):
+        annotation_dir = resolve_dataset_annotation_dir(
+            annotation_root_dir=annotation_root_dir,
+            annotation_dir_name=candidate["annotation_dir_name"],
+        )
+
+        if not annotation_dir.exists() or not annotation_dir.is_dir():
+            continue
+
+        availability = build_timedb_group_annotation_availability(
+            annotation_dir=annotation_dir,
+            file_prefix=candidate["file_prefix"],
+            deg_method=deg_method,
+        )
+
+        if not availability["available"]:
+            continue
+
+        groups.append(
+            {
+                "value": candidate["value"],
+                "label": candidate["label"],
+                "group_type": candidate["group_type"],
+                **availability,
+            }
+        )
+
+    return {
+        "available": bool(groups),
+        "available_group_count": len(groups),
+        "default_group_by": groups[0]["value"] if groups else None,
+        "groups": groups,
+    }
 
 def build_dataset_annotation_metadata(
     *,

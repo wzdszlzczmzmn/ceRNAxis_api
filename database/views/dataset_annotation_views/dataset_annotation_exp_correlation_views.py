@@ -22,6 +22,7 @@ from analysis.utils.hybrid_reference_task_utils import (
 from analysis.utils.workflow_detail_utils.workflow_exp_correlation_utils import (
     PAIRED_COHORT_VALID_EXP_CORRELATION_TYPES,
     HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES,
+    SCST_HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES,
     WORKFLOW_EXPR_SAMPLE_COL,
     WorkflowExpCorrelationPathError,
     WorkflowExpCorrelationInputError,
@@ -47,6 +48,14 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_timedb_group_annotation_file_prefix,
 )
 
+from database.utils.dataset_annotation_utils.scst_path_utils import (
+    get_scst_data_type_query,
+    get_scst_group_by_query,
+    get_scst_group_value_query,
+    validate_scst_dataset_group_by,
+    resolve_scst_dataset_group_annotation_dir,
+    get_scst_dataset_exp_correlation_file_path,
+)
 
 RNA_TYPE_EXPRESSION_FILENAME_MAP = {
     "mRNA": "{tcga_type}_mRNA_log2tpm_exp.csv",
@@ -126,9 +135,9 @@ def get_dataset_metadata_for_annotation(dataset_name: str):
 
 
 def get_tcga_reference_expression_file_path(
-    *,
-    tcga_type: str,
-    rna_type: str,
+        *,
+        tcga_type: str,
+        rna_type: str,
 ) -> Path:
     rna_type = str(rna_type or "").strip()
 
@@ -163,8 +172,8 @@ def get_tcga_reference_expression_file_path(
 
 
 def get_tcga_reference_meta_file_path(
-    *,
-    tcga_type: str,
+        *,
+        tcga_type: str,
 ) -> Path:
     base_dir = Path(settings.TCGA_DATASET_BASE_DIR).resolve()
 
@@ -414,8 +423,8 @@ class DatasetAnnotationExpCorrelationOptionsBaseView(
                 )
 
             except (
-                WorkflowExpCorrelationInputError,
-                WorkflowExpCorrelationPathError,
+                    WorkflowExpCorrelationInputError,
+                    WorkflowExpCorrelationPathError,
             ) as e:
                 return Response(
                     {
@@ -486,9 +495,9 @@ class DatasetAnnotationExpCorrelationPlotDataBaseView(
     """
 
     def get_sample_ids(
-        self,
-        *,
-        context: dict,
+            self,
+            *,
+            context: dict,
     ) -> list[str] | None:
         return None
 
@@ -608,11 +617,11 @@ class DatasetAnnotationExpCorrelationPlotDataBaseView(
                 )
 
             except (
-                WorkflowExpCorrelationInputError,
-                WorkflowExpCorrelationPathError,
-                DatasetAnnotationInputError,
-                DatasetAnnotationPathError,
-                ValueError,
+                    WorkflowExpCorrelationInputError,
+                    WorkflowExpCorrelationPathError,
+                    DatasetAnnotationInputError,
+                    DatasetAnnotationPathError,
+                    ValueError,
             ) as e:
                 return Response(
                     {
@@ -699,9 +708,9 @@ class TCGADatasetAnnotationExpCorrelationPlotDataView(
     DatasetAnnotationExpCorrelationPlotDataBaseView,
 ):
     def get_sample_ids(
-        self,
-        *,
-        context: dict,
+            self,
+            *,
+            context: dict,
     ) -> list[str] | None:
         meta_file = get_tcga_reference_meta_file_path(
             tcga_type=context["tcga_type"]
@@ -739,9 +748,9 @@ class TCGADatasetAnnotationExpCorrelationPlotDataView(
                 .astype(str)
                 .str.strip()
                 == PAIRED_COHORT_CASE_LABEL
-            ]
-            .index.astype(str)
-            .tolist()
+                ]
+                .index.astype(str)
+                .tolist()
         )
 
         if not case_samples:
@@ -768,10 +777,10 @@ class TIMEDBDatasetAnnotationExpCorrelationMixin:
         return get_timedb_group_type_query(request)
 
     def get_annotation_dir_name(
-        self,
-        *,
-        dataset_name: str,
-        group_type: str | None = None,
+            self,
+            *,
+            dataset_name: str,
+            group_type: str | None = None,
     ) -> str:
         return resolve_timedb_group_annotation_dir_name(
             dataset_name=dataset_name,
@@ -779,11 +788,11 @@ class TIMEDBDatasetAnnotationExpCorrelationMixin:
         )
 
     def get_annotation_file_prefix(
-        self,
-        *,
-        dataset_name: str,
-        annotation_dir_name: str,
-        group_type: str | None = None,
+            self,
+            *,
+            dataset_name: str,
+            annotation_dir_name: str,
+            group_type: str | None = None,
     ) -> str:
         return resolve_timedb_group_annotation_file_prefix(
             dataset_name=dataset_name,
@@ -814,4 +823,223 @@ class TIMEDBDatasetAnnotationExpCorrelationPlotDataView(
     TIMEDBDatasetAnnotationExpCorrelationMixin,
     DatasetAnnotationExpCorrelationPlotDataBaseView,
 ):
+    pass
+
+
+class SCSTDatasetAnnotationExpCorrelationMixin:
+    """
+    Shared SC/ST Dataset Annotation expression correlation context.
+
+    Query params:
+        dataset
+        data_type
+        group_by
+        group_value
+
+    Correlation file:
+        {dataset_name}_ceRNA_corr_{group_value}.csv
+
+    Expression scatter points:
+        Use the same TCGA reference expression files as the existing
+        Hybrid Reference Dataset Annotation implementation.
+
+        The TCGA project is resolved from DatasetMetadata.cancer_type.
+
+    This mirrors SCSTHybridReferenceExpCorrelationOptionsView /
+    SCSTHybridReferenceExpCorrelationPlotDataView:
+
+        - group_value selects the SC/ST correlation result file.
+        - selectable gene pairs are filtered against TCGA reference
+          expression gene sets.
+        - plot points are built from TCGA reference expression.
+    """
+
+    source = "SCST"
+    network_source_task_type = "SCSTHybridReferenceTask"
+
+    valid_types = (
+        SCST_HYBRID_REFERENCE_VALID_EXP_CORRELATION_TYPES
+    )
+
+    def resolve_annotation_context(
+            self,
+            request,
+    ) -> dict:
+        dataset_name = (
+            get_dataset_query_name(
+                request
+            )
+        )
+
+        data_type = (
+            get_scst_data_type_query(
+                request
+            )
+        )
+
+        group_by = (
+            get_scst_group_by_query(
+                request
+            )
+        )
+
+        group_value = (
+            get_scst_group_value_query(
+                request
+            )
+        )
+
+        group_by = (
+            validate_scst_dataset_group_by(
+                dataset_name=dataset_name,
+                group_by=group_by,
+            )
+        )
+
+        annotation_dir = (
+            resolve_scst_dataset_group_annotation_dir(
+                dataset_name=dataset_name,
+                group_by=group_by,
+                data_type=data_type,
+            )
+        )
+
+        correlation_file = (
+            get_scst_dataset_exp_correlation_file_path(
+                annotation_dir=annotation_dir,
+                dataset_name=dataset_name,
+                group_value=group_value,
+            )
+        )
+
+        metadata = (
+            get_dataset_metadata_for_annotation(
+                dataset_name
+            )
+        )
+
+        context = {
+            "dataset_name": dataset_name,
+            "data_type": data_type,
+            "group_by": group_by,
+            "group_type": None,
+            "group_value": group_value,
+            "annotation_dir_name": (
+                annotation_dir.name
+            ),
+            "annotation_file_prefix": (
+                dataset_name
+            ),
+            "annotation_dir": annotation_dir,
+            "correlation_file": (
+                correlation_file
+            ),
+            "metadata": metadata,
+        }
+
+        context["tcga_type"] = (
+            self.get_tcga_type(
+                context
+            )
+        )
+
+        return context
+
+    def get_tcga_type(
+            self,
+            context: dict,
+    ) -> str:
+        metadata = (
+            context.get(
+                "metadata"
+            )
+        )
+
+        if metadata is None:
+            raise DatasetAnnotationInputError(
+                "Dataset metadata is required to resolve "
+                "SC/ST Dataset Annotation cancer_type."
+            )
+
+        return normalize_tcga_type(
+            getattr(
+                metadata,
+                "cancer_type",
+                "",
+            )
+        )
+
+    def get_base_response(
+            self,
+            context: dict,
+    ) -> dict:
+        response_data = (
+            super().get_base_response(
+                context
+            )
+        )
+
+        response_data.update(
+            {
+                "data_type": (
+                    context.get(
+                        "data_type"
+                    )
+                ),
+                "group_value": (
+                    context.get(
+                        "group_value"
+                    )
+                ),
+            }
+        )
+
+        return response_data
+
+
+class SCSTDatasetAnnotationExpCorrelationOptionsView(
+    SCSTDatasetAnnotationExpCorrelationMixin,
+    DatasetAnnotationExpCorrelationOptionsBaseView,
+):
+    """
+    Return selectable SC/ST Dataset Annotation expression
+    correlation gene pairs for one group value.
+
+    Example:
+        GET /api/database/scst_dataset_annotation_exp_correlation_options/
+            ?dataset=BCC_GSE123813_aPD1
+            &data_type=sc
+            &group_by=Celltype major lineage
+            &group_value=B
+    """
+
+    pass
+
+
+class SCSTDatasetAnnotationExpCorrelationPlotDataView(
+    SCSTDatasetAnnotationExpCorrelationMixin,
+    DatasetAnnotationExpCorrelationPlotDataBaseView,
+):
+    """
+    Return SC/ST Dataset Annotation expression correlation plot data
+    for one selected gene pair.
+
+    Example:
+        GET /api/database/scst_dataset_annotation_exp_correlation_plot_data/
+            ?dataset=BCC_GSE123813_aPD1
+            &data_type=sc
+            &group_by=Celltype major lineage
+            &group_value=B
+            &type=miRNA-mRNA
+            &gene1=hsa-miR-21-5p
+            &gene2=PTEN
+
+    Sample selection:
+        None.
+
+    This intentionally matches SCSTHybridReferenceExpCorrelationPlotDataView,
+    whose TCGA reference scatter uses all samples in the selected TCGA
+    reference expression matrices.
+    """
+
     pass

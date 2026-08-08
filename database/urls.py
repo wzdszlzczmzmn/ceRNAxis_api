@@ -5,7 +5,8 @@ from database.views import cerna_axis_views, cerna_axis_network_views, dataset_v
 from database.views.dataset_annotation_views import dataset_annotation_views, dataset_annotation_network_views, \
     dataset_annotation_axis_final_views, dataset_annotation_cmap_views, dataset_annotation_deg_volcano_views, \
     dataset_annotation_log2fc_correlation_views, dataset_annotation_survival_views, \
-    dataset_annotation_deg_pathway_views, dataset_annotation_exp_correlation_views
+    dataset_annotation_deg_pathway_views, dataset_annotation_exp_correlation_views, dataset_annotation_sponge_views, \
+    dataset_annotation_cm_score_views
 
 urlpatterns = [
     path('ceRNAAxis_table_filter_options/', cerna_axis_views.FilterOptionsView.as_view(),
@@ -78,11 +79,9 @@ urlpatterns = [
     path('timedb_dataset_annotation_available/',
          dataset_annotation_views.TIMEDBDatasetAnnotationAvailabilityView.as_view(),
          name='timedb-dataset-annotation-available'),
-
-    # TIMEDB Annotation Options Views
-    path("timedb_dataset_group_by_options/",
-         dataset_annotation_views.TIMEDBAnnotationGroupByOptionsView.as_view(),
-         name="timedb-annotation-group-by-options"),
+    path('scst_dataset_annotation_available/',
+         dataset_annotation_views.SCSTDatasetAnnotationAvailabilityView.as_view(),
+         name='scst-dataset-annotation-available'),
 
     # Network Views
     path(
@@ -94,6 +93,11 @@ urlpatterns = [
         "timedb_dataset_annotation_network/",
         dataset_annotation_network_views.TIMEDBDatasetAnnotationNetworkView.as_view(),
         name="timedb_dataset_annotation_network",
+    ),
+    path(
+        "scst_dataset_annotation_network/",
+        dataset_annotation_network_views.SCSTDatasetAnnotationNetworkView.as_view(),
+        name="scst_dataset_annotation_network",
     ),
 
     # Axis Final Views
@@ -107,6 +111,11 @@ urlpatterns = [
         dataset_annotation_axis_final_views.TIMEDBDatasetAnnotationAxisFinalDataView.as_view(),
         name="timedb_dataset_annotation_axis_final",
     ),
+    path(
+        "scst_dataset_annotation_axis_final/",
+        dataset_annotation_axis_final_views.SCSTDatasetAnnotationAxisFinalDataView.as_view(),
+        name="scst_dataset_annotation_axis_final",
+    ),
 
     # CMAP Views
     path(
@@ -118,6 +127,11 @@ urlpatterns = [
         "timedb_dataset_annotation_cmap/",
         dataset_annotation_cmap_views.TIMEDBDatasetAnnotationCMapResultView.as_view(),
         name="timedb_dataset_annotation_cmap",
+    ),
+    path(
+        "scst_dataset_annotation_cmap/",
+        dataset_annotation_cmap_views.SCSTDatasetAnnotationCMapResultView.as_view(),
+        name="scst_dataset_annotation_cmap",
     ),
 
     # DEG Volcano
@@ -131,6 +145,11 @@ urlpatterns = [
         dataset_annotation_deg_volcano_views.TIMEDBDatasetAnnotationDEGVolcanoView.as_view(),
         name="timedb_dataset_annotation_deg_volcano",
     ),
+    path(
+        "scst_dataset_annotation_deg_volcano/",
+        dataset_annotation_deg_volcano_views.SCSTDatasetAnnotationDEGVolcanoView.as_view(),
+        name="scst_dataset_annotation_deg_volcano",
+    ),
 
     # Log2FC Correlation Views
     path(
@@ -142,6 +161,11 @@ urlpatterns = [
         "timedb_dataset_annotation_log2fc_correlation/",
         dataset_annotation_log2fc_correlation_views.TIMEDBDatasetAnnotationLog2FCCorrelationView.as_view(),
         name="timedb_dataset_annotation_log2fc_correlation",
+    ),
+    path(
+        "scst_dataset_annotation_log2fc_correlation/",
+        dataset_annotation_log2fc_correlation_views.SCSTDatasetAnnotationLog2FCCorrelationView.as_view(),
+        name="scst_dataset_annotation_log2fc_correlation",
     ),
 
     # Exp Correlation Views
@@ -165,6 +189,16 @@ urlpatterns = [
         dataset_annotation_exp_correlation_views.TIMEDBDatasetAnnotationExpCorrelationPlotDataView.as_view(),
         name="timedb_dataset_annotation_exp_correlation_plot_data",
     ),
+    path(
+        "scst_dataset_annotation_exp_correlation_options/",
+        dataset_annotation_exp_correlation_views.SCSTDatasetAnnotationExpCorrelationOptionsView.as_view(),
+        name="scst_dataset_annotation_exp_correlation_options",
+    ),
+    path(
+        "scst_dataset_annotation_exp_correlation_plot_data/",
+        dataset_annotation_exp_correlation_views.SCSTDatasetAnnotationExpCorrelationPlotDataView.as_view(),
+        name="scst_dataset_annotation_exp_correlation_plot_data",
+    ),
 
     # Survival KM Views
     path(
@@ -177,6 +211,11 @@ urlpatterns = [
         dataset_annotation_survival_views.TIMEDBDatasetAnnotationSurvivalKMDataView.as_view(),
         name="timedb_dataset_annotation_survival_km",
     ),
+    path(
+        "scst_dataset_annotation_survival_km/",
+        dataset_annotation_survival_views.SCSTDatasetAnnotationSurvivalKMDataView.as_view(),
+        name="scst_dataset_annotation_survival_km",
+    ),
 
     # DEG Pathway Views
     path(
@@ -188,5 +227,53 @@ urlpatterns = [
         "timedb_dataset_annotation_deg_pathway/",
         dataset_annotation_deg_pathway_views.TIMEDBDatasetAnnotationDEGPathwayView.as_view(),
         name="timedb_dataset_annotation_deg_pathway",
+    ),
+    path(
+        "scst_dataset_annotation_deg_pathway/",
+        dataset_annotation_deg_pathway_views.SCSTDatasetAnnotationDEGPathwayView.as_view(),
+        name="scst_dataset_annotation_deg_pathway",
+    ),
+
+    # Sponge Views
+    path(
+        "tcga_dataset_annotation_sponge/",
+        dataset_annotation_sponge_views.TCGADatasetAnnotationSpongeDataView.as_view(),
+        name="tcga_dataset_annotation_sponge",
+    ),
+    path(
+        "timedb_dataset_annotation_sponge/",
+        dataset_annotation_sponge_views.TIMEDBDatasetAnnotationSpongeDataView.as_view(),
+        name="timedb_dataset_annotation_sponge",
+    ),
+
+    path(
+        "tcga_dataset_annotation_cm_score_options/",
+        dataset_annotation_cm_score_views.TCGADatasetAnnotationCMScoreOptionsView.as_view(),
+        name="tcga_dataset_annotation_cm_score_options",
+    ),
+    path(
+        "tcga_dataset_annotation_cm_score_result/",
+        dataset_annotation_cm_score_views.TCGADatasetAnnotationCMScoreResultView.as_view(),
+        name="tcga_dataset_annotation_cm_score_result",
+    ),
+    path(
+        "timedb_dataset_annotation_cm_score_options/",
+        dataset_annotation_cm_score_views.TIMEDBDatasetAnnotationCMScoreOptionsView.as_view(),
+        name="timedb_dataset_annotation_cm_score_options",
+    ),
+    path(
+        "timedb_dataset_annotation_cm_score_result/",
+        dataset_annotation_cm_score_views.TIMEDBDatasetAnnotationCMScoreResultView.as_view(),
+        name="timedb_dataset_annotation_cm_score_result",
+    ),
+    path(
+        "scst_dataset_annotation_cm_score_options/",
+        dataset_annotation_cm_score_views.SCSTDatasetAnnotationCMScoreOptionsView.as_view(),
+        name="scst_dataset_annotation_cm_score_options",
+    ),
+    path(
+        "scst_dataset_annotation_cm_score_result/",
+        dataset_annotation_cm_score_views.SCSTDatasetAnnotationCMScoreResultView.as_view(),
+        name="scst_dataset_annotation_cm_score_result",
     ),
 ]

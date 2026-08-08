@@ -37,7 +37,7 @@ TIMEDB_IGNORED_JSON_GROUP_BY_FIELDS = {
 
 
 TIMEDB_GROUP_TYPES = {
-    "common",
+    "other",
     "grade",
     "stage",
 }
@@ -62,6 +62,10 @@ DATASET_ANNOTATION_EXP_CORRELATION_SUFFIX = "_ceRNA_corr.csv"
 DATASET_ANNOTATION_SURVIVAL_SUFFIX = "_survival_analysis.csv"
 
 DATASET_ANNOTATION_MRNA_GSEA_SUFFIX = "_mRNA_gsea.csv"
+
+DATASET_ANNOTATION_SPONGE_RESULT_SUFFIX = "_sponge_result.csv"
+
+DATASET_ANNOTATION_CMDRUG_RESULT_DIR_SUFFIX = "_CMdrug_result"
 
 
 class DatasetAnnotationInputError(ValueError):
@@ -344,6 +348,39 @@ def get_dataset_annotation_mrna_gsea_file_path(
     )
 
 
+def get_dataset_annotation_sponge_result_file_path(
+    *,
+    annotation_dir: Path,
+    file_prefix: str,
+) -> Path:
+    return get_dataset_annotation_file_path(
+        annotation_dir=annotation_dir,
+        file_prefix=file_prefix,
+        filename_suffix=DATASET_ANNOTATION_SPONGE_RESULT_SUFFIX,
+    )
+
+
+def get_dataset_annotation_cmdrug_result_dir_path(
+    *,
+    annotation_dir: Path,
+    file_prefix: str,
+) -> Path:
+    file_prefix = validate_annotation_dataset_name(file_prefix)
+
+    dir_path = (
+        annotation_dir / f"{file_prefix}{DATASET_ANNOTATION_CMDRUG_RESULT_DIR_SUFFIX}"
+    ).resolve()
+
+    try:
+        dir_path.relative_to(annotation_dir)
+    except ValueError:
+        raise DatasetAnnotationInputError(
+            "Invalid dataset annotation CMdrug result directory path."
+        )
+
+    return dir_path
+
+
 def get_dataset_annotation_cerna_axis_file_path(
     *,
     annotation_dir: Path,
@@ -394,6 +431,25 @@ def get_dataset_annotation_limma_mrna_intersect_file_path(
 
 def is_existing_file(file_path: Path) -> bool:
     return file_path.exists() and file_path.is_file()
+
+
+def is_non_empty_file_directory(dir_path: Path) -> bool:
+    """
+    Return True only when the path is an existing directory containing
+    at least one direct child file.
+
+    Nested subdirectories are not searched recursively.
+    """
+    if not dir_path.exists() or not dir_path.is_dir():
+        return False
+
+    try:
+        return any(
+            child.is_file()
+            for child in dir_path.iterdir()
+        )
+    except OSError:
+        return False
 
 
 def normalize_timedb_json_group_by_label(group_by: str) -> str:
@@ -477,27 +533,20 @@ def get_timedb_json_group_by_fields(dataset_name: str) -> list[str]:
     return datasets_info.get(dataset_name, [])
 
 
-def get_timedb_json_group_by_options(dataset_name: str) -> list[dict]:
+def get_timedb_other_group_by_option(dataset_name: str) -> dict | None:
     """
-    Base annotation directory:
-    module3/{dataset_name}
+    Build the optional TIMEDB ``other`` group from dataset metadata.
 
-    value 使用 JSON 中的原始字段。
-
-    以下字段不作为 common 类型返回，因为已经由独立目录提供：
-    - c_tumor_grade -> grade
-    - c_tumor_stage -> stage
-
-    group_type:
-    - common -> module3/{dataset_name}
+    Grade and stage fields are excluded because they are represented by
+    dedicated annotation directories. After exclusion, a dataset may contain
+    zero or one ``other`` group. More than one field indicates invalid TIMEDB
+    metadata and is rejected rather than silently selecting one.
     """
     dataset_name = validate_annotation_dataset_name(dataset_name)
 
-    group_by_fields = get_timedb_json_group_by_fields(dataset_name)
+    group_by_fields = []
 
-    results = []
-
-    for group_by in group_by_fields:
+    for group_by in get_timedb_json_group_by_fields(dataset_name):
         group_by = str(group_by or "").strip()
 
         if not group_by:
@@ -506,19 +555,26 @@ def get_timedb_json_group_by_options(dataset_name: str) -> list[dict]:
         if group_by.lower() in TIMEDB_IGNORED_JSON_GROUP_BY_FIELDS:
             continue
 
-        results.append(
-            {
-                "value": group_by,
-                "label": normalize_timedb_json_group_by_label(group_by),
-                "group_type": "common",
-                "source": "json",
-                "annotation_dir_name": dataset_name,
-                "file_prefix": dataset_name,
-            }
+        group_by_fields.append(group_by)
+
+    if len(group_by_fields) > 1:
+        raise DatasetAnnotationPathError(
+            "Invalid TIMEDB dataset metadata: only one other group_by "
+            f"field is allowed for dataset {dataset_name}."
         )
 
-    return results
+    if not group_by_fields:
+        return None
 
+    group_by = group_by_fields[0]
+
+    return {
+        "value": group_by,
+        "label": normalize_timedb_json_group_by_label(group_by),
+        "group_type": "other",
+        "annotation_dir_name": dataset_name,
+        "file_prefix": dataset_name,
+    }
 
 def get_timedb_suffix_group_by_option(
     *,
@@ -584,6 +640,13 @@ def build_dataset_annotation_visualization_availability(
 
     DEG Pathway Enrichment Plot:
     - {prefix}_mRNA_gsea.csv
+
+    SPONGE:
+    - {prefix}_sponge_result.csv
+
+    CMdrug:
+    - {prefix}_CMdrug_result/
+    - available only when the directory contains at least one file
     """
     cerna_axis_file = get_dataset_annotation_cerna_axis_file_path(
         annotation_dir=annotation_dir,
@@ -630,6 +693,16 @@ def build_dataset_annotation_visualization_availability(
         file_prefix=file_prefix,
     )
 
+    sponge_result_file = get_dataset_annotation_sponge_result_file_path(
+        annotation_dir=annotation_dir,
+        file_prefix=file_prefix,
+    )
+
+    cmdrug_result_dir = get_dataset_annotation_cmdrug_result_dir_path(
+        annotation_dir=annotation_dir,
+        file_prefix=file_prefix,
+    )
+
     visualizations = {
         "annotation_network": (
             is_existing_file(cerna_axis_file)
@@ -642,6 +715,8 @@ def build_dataset_annotation_visualization_availability(
         "exp_correlation": is_existing_file(exp_correlation_file),
         "survival": is_existing_file(survival_file),
         "deg_pathway": is_existing_file(mrna_gsea_file),
+        "sponge": is_existing_file(sponge_result_file),
+        "CMdrug": is_non_empty_file_directory(cmdrug_result_dir),
     }
 
     available_visualization_count = sum(
@@ -655,13 +730,20 @@ def build_dataset_annotation_visualization_availability(
 
 
 def build_timedb_group_by_candidates(dataset_name: str) -> list[dict]:
+    """
+    Build TIMEDB group candidates in default-selection order:
+    other, grade, stage.
+
+    The ``other`` group is optional and unique per dataset.
+    """
     dataset_name = validate_annotation_dataset_name(dataset_name)
 
     candidates = []
 
-    candidates.extend(
-        get_timedb_json_group_by_options(dataset_name)
-    )
+    other_option = get_timedb_other_group_by_option(dataset_name)
+
+    if other_option:
+        candidates.append(other_option)
 
     for suffix in ["grade", "stage"]:
         option = get_timedb_suffix_group_by_option(
@@ -674,88 +756,92 @@ def build_timedb_group_by_candidates(dataset_name: str) -> list[dict]:
 
     return candidates
 
-
-def build_timedb_group_by_options(
+def validate_timedb_group_selection(
     *,
-    annotation_root_dir,
     dataset_name: str,
+    group_by: str,
+    group_type: str | None,
 ) -> dict:
     """
-    Build TIMEDB annotation group-by options with visualization availability.
+    Validate one TIMEDB Dataset Annotation group selection against
+    the same candidate model used by availability.
 
-    Candidate directories:
-    - common/json source -> {dataset_name}
-    - grade -> {dataset_name}_grade
-    - stage -> {dataset_name}_stage
+    Valid combinations are source-dependent:
 
-    A candidate annotation type is returned only when:
-    - its directory exists
-    - available_visualization_count > 0
+        other:
+            group_by must equal the configured JSON group-by field.
 
-    If available_visualization_count == 0, the annotation type is excluded
-    and should be treated as annotation not successful.
+        grade:
+            group_by == "grade"
+
+        stage:
+            group_by == "stage"
+
+    Returns the matched candidate, including:
+        value
+        label
+        group_type
+        annotation_dir_name
+        file_prefix
     """
-    dataset_name = validate_annotation_dataset_name(dataset_name)
+    dataset_name = validate_annotation_dataset_name(
+        dataset_name
+    )
 
-    results = []
+    group_by = str(
+        group_by or ""
+    ).strip()
 
-    candidates = build_timedb_group_by_candidates(dataset_name)
+    if not group_by:
+        raise DatasetAnnotationInputError(
+            "Missing required parameter: group_by."
+        )
+
+    group_type = validate_timedb_group_type(
+        group_type
+    )
+
+    candidates = build_timedb_group_by_candidates(
+        dataset_name
+    )
 
     for candidate in candidates:
-        annotation_dir_name = candidate["annotation_dir_name"]
+        if (
+            candidate.get("value") == group_by
+            and candidate.get("group_type") == group_type
+        ):
+            return candidate
 
-        try:
-            annotation_dir = resolve_dataset_annotation_dir(
-                annotation_root_dir=annotation_root_dir,
-                annotation_dir_name=annotation_dir_name,
-            )
-        except Exception:
-            continue
-
-        if not annotation_dir.exists() or not annotation_dir.is_dir():
-            continue
-
-        availability = build_dataset_annotation_visualization_availability(
-            annotation_dir=annotation_dir,
-            file_prefix=candidate["file_prefix"],
+    allowed = [
+        (
+            f"{candidate.get('value')}"
+            f"/{candidate.get('group_type')}"
         )
+        for candidate in candidates
+    ]
 
-        if availability["available_visualization_count"] <= 0:
-            continue
+    allowed_text = (
+        ", ".join(allowed)
+        if allowed
+        else "none"
+    )
 
-        results.append(
-            {
-                "value": candidate["value"],
-                "label": candidate["label"],
-                "group_type": candidate["group_type"],
-                "source": candidate["source"],
-                "annotation_dir_name": annotation_dir_name,
-                "file_prefix": candidate["file_prefix"],
-                "available": True,
-                **availability,
-            }
-        )
-
-    return {
-        "success": True,
-        "source": "TIMEDB",
-        "dataset_name": dataset_name,
-        "count": len(results),
-        "default_group_by": results[0]["value"] if results else None,
-        "results": results,
-    }
+    raise DatasetAnnotationInputError(
+        "Invalid TIMEDB group_by/group_type combination. "
+        f"Allowed combinations: {allowed_text}."
+    )
 
 
 def validate_timedb_group_type(group_type: str | None) -> str:
-    group_type = str(group_type or "common").strip()
+    group_type = str(group_type or "other").strip()
 
     if not group_type:
-        group_type = "common"
+        group_type = "other"
 
     if group_type not in TIMEDB_GROUP_TYPES:
         raise DatasetAnnotationInputError(
             "Invalid group_type parameter. "
-            "Allowed values are: common, grade, stage."
+            "Allowed values are: other, grade, stage."
         )
 
     return group_type
@@ -775,7 +861,7 @@ def resolve_timedb_group_annotation_dir_name(
     dataset_name = resolve_timedb_annotation_dir_name(dataset_name)
     group_type = validate_timedb_group_type(group_type)
 
-    if group_type == "common":
+    if group_type == "other":
         return dataset_name
 
     if group_type == "grade":
@@ -799,7 +885,7 @@ def resolve_timedb_group_annotation_file_prefix(
     remains the original dataset name.
 
     Examples:
-        group_type=common -> GSE20194/GSE20194_ceRNA_axis.csv
+        group_type=other  -> GSE20194/GSE20194_ceRNA_axis.csv
         group_type=grade  -> GSE20194_grade/GSE20194_ceRNA_axis.csv
         group_type=stage  -> GSE20194_stage/GSE20194_ceRNA_axis.csv
     """

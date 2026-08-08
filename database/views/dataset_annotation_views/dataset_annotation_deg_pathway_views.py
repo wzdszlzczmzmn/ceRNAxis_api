@@ -24,6 +24,15 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_timedb_group_annotation_file_prefix,
 )
 
+from database.utils.dataset_annotation_utils.scst_path_utils import (
+    get_scst_data_type_query,
+    get_scst_group_by_query,
+    get_scst_group_value_query,
+    validate_scst_dataset_group_by,
+    resolve_scst_dataset_group_annotation_dir,
+    get_scst_dataset_mrna_gsea_file_path,
+)
+
 
 class BaseDatasetAnnotationDEGPathwayView(APIView):
     """
@@ -41,6 +50,10 @@ class BaseDatasetAnnotationDEGPathwayView(APIView):
 
     annotation_root_setting_name = None
     annotation_dir_name_resolver = None
+
+    # TCGA/TIMEDB use the generic annotation-directory resolver.
+    # SC/ST resolves its directory from data_type + group_by.
+    requires_annotation_dir_name_resolver = True
 
     title = "DEG Pathway Enrichment"
 
@@ -173,8 +186,13 @@ class BaseDatasetAnnotationDEGPathwayView(APIView):
             if not self.network_source_task_type:
                 raise RuntimeError("Missing network_source_task_type.")
 
-            if not self.annotation_dir_name_resolver:
-                raise RuntimeError("Missing annotation_dir_name_resolver.")
+            if (
+                self.requires_annotation_dir_name_resolver
+                and not self.annotation_dir_name_resolver
+            ):
+                raise RuntimeError(
+                    "Missing annotation_dir_name_resolver."
+                )
 
             context = self.resolve_annotation_context(request)
 
@@ -315,3 +333,160 @@ class TIMEDBDatasetAnnotationDEGPathwayView(
             dataset_name=dataset_name,
             group_type=group_type,
         )
+
+
+class SCSTDatasetAnnotationDEGPathwayView(
+    BaseDatasetAnnotationDEGPathwayView
+):
+    """
+    SC/ST Dataset Annotation DEG Pathway / GSEA data.
+
+    Query params:
+        dataset:
+            Dataset name.
+
+        data_type:
+            sc | st
+
+        group_by:
+            Configured SC/ST Dataset Annotation Group By.
+
+        group_value:
+            Selected Group Value.
+
+    Input file:
+        {dataset_name}_mRNA_gsea_{group_value}.csv
+
+    Directory:
+        sc:
+            TISCH2_DATASET_ANNOTATIONS_DIR/
+                {dataset_name}_{normalized_group_by}/
+
+        st:
+            SCTML_DATASET_ANNOTATIONS_DIR/
+                {dataset_name}_{normalized_group_by}/
+
+    Source semantics:
+        SC/ST Hybrid Reference annotation output.
+
+    The actual pathway normalization and response construction are
+    inherited from BaseDatasetAnnotationDEGPathwayView and the
+    common DEG pathway utility.
+    """
+
+    source = "SCST"
+
+    network_source_task_type = (
+        "SCSTHybridReferenceTask"
+    )
+
+    requires_annotation_dir_name_resolver = False
+
+    title = (
+        "TCGA-based DEG Pathway Enrichment"
+    )
+
+    def resolve_annotation_context(
+        self,
+        request,
+    ) -> dict:
+        dataset_name = (
+            get_dataset_query_name(
+                request
+            )
+        )
+
+        data_type = (
+            get_scst_data_type_query(
+                request
+            )
+        )
+
+        group_by = (
+            get_scst_group_by_query(
+                request
+            )
+        )
+
+        group_value = (
+            get_scst_group_value_query(
+                request
+            )
+        )
+
+        group_by = (
+            validate_scst_dataset_group_by(
+                dataset_name=dataset_name,
+                group_by=group_by,
+            )
+        )
+
+        annotation_dir = (
+            resolve_scst_dataset_group_annotation_dir(
+                dataset_name=dataset_name,
+                group_by=group_by,
+                data_type=data_type,
+            )
+        )
+
+        gsea_file = (
+            get_scst_dataset_mrna_gsea_file_path(
+                annotation_dir=annotation_dir,
+                dataset_name=dataset_name,
+                group_value=group_value,
+            )
+        )
+
+        return {
+            "dataset_name": dataset_name,
+            "data_type": data_type,
+
+            "group_by": group_by,
+            "group_type": None,
+            "group_value": group_value,
+
+            "annotation_dir_name": (
+                annotation_dir.name
+            ),
+
+            # SC/ST filenames are group-value based.
+            # Keep dataset_name as the informational prefix.
+            "annotation_file_prefix": (
+                dataset_name
+            ),
+
+            "annotation_dir": (
+                annotation_dir
+            ),
+
+            "gsea_file": (
+                gsea_file
+            ),
+        }
+
+    def get_base_response(
+        self,
+        context: dict,
+    ) -> dict:
+        response_data = (
+            super().get_base_response(
+                context
+            )
+        )
+
+        response_data.update(
+            {
+                "data_type": (
+                    context.get(
+                        "data_type"
+                    )
+                ),
+                "group_value": (
+                    context.get(
+                        "group_value"
+                    )
+                ),
+            }
+        )
+
+        return response_data

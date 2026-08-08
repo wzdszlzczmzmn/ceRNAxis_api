@@ -1,0 +1,809 @@
+{
+  "AEL_GSE142213": [
+    "celltype malignancy"
+  ],
+  "ALL_GSE132509": [
+    "celltype malignancy"
+  ],
+  "ALL_GSE153697": [
+    "celltype malignancy"
+  ],
+  "ALL_GSE154109": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "AML_GSE116256": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "AML_GSE135851": [
+    "celltype malignancy"
+  ],
+  "AML_GSE147989": [
+    "celltype malignancy"
+  ],
+  "AML_GSE154109": [
+    "celltype malignancy"
+  ],
+  "BCC_GSE123813_aPD1": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "BCC_GSE141526": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "BLCA_GSE130001": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "BLCA_GSE145281_aPDL1": [
+    "celltype malignancy"
+  ],
+  "BLCA_GSE149652": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "BRCA_EMTAB8107": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE110686": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE114727_10X": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE114727_inDrop": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE136206_mouse_aPD1aCTLA4": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE138536": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE143423": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "BRCA_GSE148673": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "BRCA_GSE150660": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE161529": [
+    "celltype malignancy"
+  ],
+  "BRCA_GSE176078": [
+    "celltype malignancy"
+  ],
+  "BRCA_SRP114962": [
+    "celltype malignancy"
+  ],
+  "CESC_GSE168652": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "CHOL_GSE125449_aPD1aPDL1aCTLA4": [
+    "celltype malignancy"
+  ],
+  "CHOL_GSE138709": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "CHOL_GSE142784": [
+    "celltype malignancy"
+  ],
+  "CLL_GSE111014": [
+    "celltype malignancy"
+  ],
+  "CLL_GSE125881": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "CLL_GSE132065": [
+    "celltype malignancy"
+  ],
+  "CLL_GSE142744": [
+    "celltype malignancy"
+  ],
+  "CLL_GSE152469": [
+    "celltype malignancy"
+  ],
+  "CLL_GSE159417": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "CRC_EMTAB8107": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE108989": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE112865_mouse_aPD1": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE120909_mouse_aPD1": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE122969_mouse_aPD1aTIM3": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE136394": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE139555": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "CRC_GSE146771_10X": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE146771_Smartseq2": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "CRC_GSE166555": [
+    "celltype malignancy"
+  ],
+  "CRC_GSE179784": [
+    "celltype malignancy"
+  ],
+  "DLBC_GSE175510": [
+    "celltype malignancy"
+  ],
+  "ESCA_GSE154763": [
+    "celltype malignancy"
+  ],
+  "ESCA_GSE160269": [
+    "celltype malignancy"
+  ],
+  "ESCA_GSE173950": [
+    "celltype malignancy"
+  ],
+  "GCTB_GSE168664": [
+    "celltype malignancy"
+  ],
+  "GIST_GSE162115": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE102130": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE103224": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE131928_10X": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE131928_Smartseq2": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE135437": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE138794": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE139448": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE141383": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "Glioma_GSE141460": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE141982": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE148842": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE162631": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "Glioma_GSE163108_10X": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE163108_Smartseq2": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE70630": [
+    "celltype malignancy"
+  ],
+  "Glioma_GSE84465": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "Glioma_GSE89567": [
+    "celltype malignancy"
+  ],
+  "HB_GSE180665": [
+    "celltype malignancy"
+  ],
+  "HNSC_GSE103322": [
+    "celltype malignancy"
+  ],
+  "HNSC_GSE139324": [
+    "celltype malignancy"
+  ],
+  "HNSC_GSE180268": [
+    "celltype malignancy"
+  ],
+  "KICH_GSE159115": [
+    "celltype malignancy"
+  ],
+  "KIPAN_GSE154763": [
+    "celltype malignancy"
+  ],
+  "KIPAN_GSE159913": [
+    "celltype malignancy"
+  ],
+  "KIRC_GSE111360": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "KIRC_GSE121636": [
+    "celltype malignancy"
+  ],
+  "KIRC_GSE139555": [
+    "celltype malignancy"
+  ],
+  "KIRC_GSE145281_aPDL1": [
+    "celltype malignancy"
+  ],
+  "KIRC_GSE159115": [
+    "celltype malignancy"
+  ],
+  "KIRC_GSE171306": [
+    "celltype malignancy"
+  ],
+  "LIHC_GSE125449_aPDL1aCTLA4": [
+    "celltype malignancy"
+  ],
+  "LIHC_GSE140228_10X": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "LIHC_GSE140228_Smartseq2": [
+    "celltype malignancy"
+  ],
+  "LIHC_GSE146115": [
+    "celltype malignancy"
+  ],
+  "LIHC_GSE146409": [
+    "celltype malignancy"
+  ],
+  "LIHC_GSE166635": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "LIHC_GSE179795": [
+    "celltype malignancy"
+  ],
+  "LIHC_GSE98638": [
+    "celltype malignancy"
+  ],
+  "LSCC_GSE150321": [
+    "celltype malignancy"
+  ],
+  "MB_GSE119926": [
+    "celltype malignancy"
+  ],
+  "MB_GSE155446": [
+    "celltype malignancy"
+  ],
+  "MCC_GSE117988_aPD1aCTLA4": [
+    "celltype malignancy"
+  ],
+  "MCC_GSE118056_aPDL1": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "MF_GSE165623": [
+    "celltype malignancy"
+  ],
+  "MF_GSE173820": [
+    "celltype malignancy"
+  ],
+  "MM_GSE117156": [
+    "celltype malignancy"
+  ],
+  "MM_GSE141299": [
+    "celltype malignancy"
+  ],
+  "MM_GSE143317": [
+    "celltype malignancy"
+  ],
+  "MM_GSE151310": [
+    "celltype malignancy"
+  ],
+  "MM_GSE154763": [
+    "celltype malignancy"
+  ],
+  "MM_GSE161801": [
+    "celltype malignancy"
+  ],
+  "MM_GSE164551": [
+    "celltype malignancy"
+  ],
+  "MM_GSE175385": [
+    "celltype malignancy"
+  ],
+  "MPNST_GSE165826": [
+    "celltype malignancy"
+  ],
+  "NET_GSE140312": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "Neurofibroma_GSE163028": [
+    "celltype malignancy"
+  ],
+  "NHL_GSE128531": [
+    "celltype malignancy"
+  ],
+  "NHL_GSE147944": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "NPC_GSE150430": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "NPC_GSE162025": [
+    "celltype malignancy"
+  ],
+  "NSCLC_EMTAB6149": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE117570": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "NSCLC_GSE127465": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE127471": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE131907": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE139555": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE143423": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "NSCLC_GSE146100": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "NSCLC_GSE148071": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE149655": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE150660": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "NSCLC_GSE151537": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "NSCLC_GSE153935": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE162498": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE176021_aPD1": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE179373": [
+    "celltype malignancy"
+  ],
+  "NSCLC_GSE99254": [
+    "celltype malignancy"
+  ],
+  "OSCC_GSE172577": [
+    "celltype malignancy"
+  ],
+  "OS_GSE162454": [
+    "celltype malignancy"
+  ],
+  "OV_EMTAB8107": [
+    "celltype malignancy"
+  ],
+  "OV_GSE115007": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "OV_GSE118828": [
+    "celltype malignancy"
+  ],
+  "OV_GSE130000": [
+    "celltype malignancy"
+  ],
+  "OV_GSE147082": [
+    "celltype malignancy"
+  ],
+  "OV_GSE151214": [
+    "celltype malignancy"
+  ],
+  "OV_GSE154600": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "OV_GSE154763": [
+    "celltype malignancy"
+  ],
+  "OV_GSE158722": [
+    "celltype malignancy"
+  ],
+  "PAAD_CRA001160": [
+    "celltype malignancy"
+  ],
+  "PAAD_GSE111672": [
+    "celltype malignancy"
+  ],
+  "PAAD_GSE141017": [
+    "celltype malignancy"
+  ],
+  "PAAD_GSE148673": [
+    "celltype malignancy"
+  ],
+  "PAAD_GSE154763": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "PAAD_GSE154778": [
+    "celltype malignancy"
+  ],
+  "PAAD_GSE158356": [
+    "celltype malignancy"
+  ],
+  "PAAD_GSE162708": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "PAAD_GSE165399": [
+    "celltype malignancy"
+  ],
+  "PCFCL_GSE173820": [
+    "celltype malignancy"
+  ],
+  "PPB_GSE163678": [
+    "celltype malignancy"
+  ],
+  "PRAD_GSE137829": [
+    "celltype malignancy"
+  ],
+  "PRAD_GSE141445": [
+    "celltype malignancy"
+  ],
+  "PRAD_GSE143791": [
+    "celltype malignancy"
+  ],
+  "PRAD_GSE150692": [
+    "celltype malignancy"
+  ],
+  "PRAD_GSE172301": [
+    "celltype malignancy"
+  ],
+  "PRAD_GSE176031": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "SARC_GSE119352_mouse_aPD1aCTLA4": [
+    "celltype malignancy"
+  ],
+  "SCC_GSE123813_aPD1": [
+    "celltype malignancy"
+  ],
+  "SCC_GSE144236": [
+    "celltype malignancy"
+  ],
+  "SCC_GSE145328": [
+    "celltype malignancy"
+  ],
+  "SCLC_GSE150766": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE115978_aPD1": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE120575_aPD1aCTLA4": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE123139": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "SKCM_GSE134388_aPD1": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE139249": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE148190": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE159251": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE166181_aPD1": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE179373": [
+    "celltype malignancy"
+  ],
+  "SKCM_GSE72056": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "SS_GSE131309_10X": [
+    "celltype malignancy"
+  ],
+  "SS_GSE131309_Smartseq2": [
+    "celltype malignancy"
+  ],
+  "STAD_GSE134520": [
+    "celltype malignancy"
+  ],
+  "STAD_GSE167297": [
+    "celltype malignancy"
+  ],
+  "THCA_GSE148673": [
+    "celltype malignancy"
+  ],
+  "THCA_GSE154763": [
+    "celltype malignancy"
+  ],
+  "THCA_GSE163203": [
+    "celltype malignancy"
+  ],
+  "UCEC_GSE139555": [
+    "celltype malignancy"
+  ],
+  "UCEC_GSE154763": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "UVM_GSE138433": [
+    "celltype malignancy"
+  ],
+  "UVM_GSE139829": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "UVM_GSE160883": [
+    "Celltype major lineage",
+    "celltype malignancy"
+  ],
+  "UVM_GSE169609": [
+    "Celltype major lineage",
+    "celltype malignancy",
+    "Celltype minor lineage"
+  ],
+  "Spatial_brca_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_cervical_cancer_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_crc_ffpe_11mm_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_crc_ffpe_Xenium_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_gbm_ffpe_11mm_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324060": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324061": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324062": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324063": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324064": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324065": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324066": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_hn_spatial_GSE181300_SRR15324067": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_intestine_cancer_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_lu_nec_ffpe_11mm_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_lu_scc_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_mel_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_ffpe_11mm_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230113": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230114": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230116": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230118": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230119": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230121": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230124": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_ov_spatial_GSE211956_SRR21230125": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_pr_acc_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_pr_ffpe_10x": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832354": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832355": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832356": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832357": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832358": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832359": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832360": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832361": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832362": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832363": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832364": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832365": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832366": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832367": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832368": [
+    "celllabel",
+    "celltype"
+  ],
+  "Spatial_sscc_spatial_GSE144239_SRR11832369": [
+    "celllabel",
+    "celltype"
+  ]
+}

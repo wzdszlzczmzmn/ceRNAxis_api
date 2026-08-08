@@ -12,6 +12,7 @@ from analysis.utils.paired_cohort_task_utils import (
 )
 from analysis.utils.hybrid_reference_task_utils import (
     HYBRID_REFERENCE_SURVIVAL_GROUPS,
+    SCST_HYBRID_REFERENCE_SURVIVAL_GROUPS,
 )
 from analysis.utils.workflow_detail_utils.survival_km_utils import (
     SurvivalKMInputError,
@@ -28,6 +29,15 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_timedb_annotation_dir_name,
     get_dataset_annotation_survival_file_path, resolve_timedb_group_annotation_file_prefix,
     resolve_timedb_group_annotation_dir_name, get_timedb_group_type_query,
+)
+
+from database.utils.dataset_annotation_utils.scst_path_utils import (
+    get_scst_data_type_query,
+    get_scst_group_by_query,
+    get_scst_group_value_query,
+    validate_scst_dataset_group_by,
+    resolve_scst_dataset_group_annotation_dir,
+    get_scst_dataset_survival_file_path,
 )
 
 
@@ -47,6 +57,10 @@ class BaseDatasetAnnotationSurvivalKMDataView(APIView):
 
     annotation_root_setting_name = None
     annotation_dir_name_resolver = None
+
+    # TCGA/TIMEDB use the generic annotation-dir resolver.
+    # SC/ST resolves its directory from data_type + group_by.
+    requires_annotation_dir_name_resolver = True
 
     title = "ceRNA axis-based survival analysis"
     valid_groups = []
@@ -180,8 +194,13 @@ class BaseDatasetAnnotationSurvivalKMDataView(APIView):
             if not self.network_source_task_type:
                 raise RuntimeError("Missing network_source_task_type.")
 
-            if not self.annotation_dir_name_resolver:
-                raise RuntimeError("Missing annotation_dir_name_resolver.")
+            if (
+                self.requires_annotation_dir_name_resolver
+                and not self.annotation_dir_name_resolver
+            ):
+                raise RuntimeError(
+                    "Missing annotation_dir_name_resolver."
+                )
 
             if not self.valid_groups:
                 raise RuntimeError("Missing valid_groups.")
@@ -316,3 +335,175 @@ class TIMEDBDatasetAnnotationSurvivalKMDataView(
             dataset_name=dataset_name,
             group_type=group_type,
         )
+
+
+class SCSTDatasetAnnotationSurvivalKMDataView(
+    BaseDatasetAnnotationSurvivalKMDataView
+):
+    """
+    SC/ST Dataset Annotation Kaplan-Meier survival data.
+
+    Query params:
+        dataset:
+            Dataset name.
+
+        data_type:
+            sc | st
+
+        group_by:
+            Configured SC/ST Dataset Annotation Group By.
+
+        group_value:
+            Selected Group Value.
+
+    Input filename:
+        {dataset_name}_survival_analysis_{group_value}.csv
+
+    Directory:
+        sc:
+            TISCH2_DATASET_ANNOTATIONS_DIR/
+                {dataset_name}_{normalized_group_by}/
+
+        st:
+            SCTML_DATASET_ANNOTATIONS_DIR/
+                {dataset_name}_{normalized_group_by}/
+
+    Source semantics:
+        SC/ST Hybrid Reference annotation output.
+
+    KM semantics:
+        Reuse the existing common Survival KM builder.
+
+        time:
+            n_os
+
+        event:
+            c_os_status
+
+        cluster:
+            ceRNA_cluster
+
+        groups:
+            Cluster_1
+            Cluster_2
+    """
+
+    source = "SCST"
+    network_source_task_type = (
+        "SCSTHybridReferenceTask"
+    )
+
+    requires_annotation_dir_name_resolver = False
+
+    title = (
+        "TCGA-based ceRNA axis survival analysis"
+    )
+
+    valid_groups = (
+        SCST_HYBRID_REFERENCE_SURVIVAL_GROUPS
+    )
+
+    def resolve_annotation_context(
+        self,
+        request,
+    ) -> dict:
+        dataset_name = (
+            get_dataset_query_name(
+                request
+            )
+        )
+
+        data_type = (
+            get_scst_data_type_query(
+                request
+            )
+        )
+
+        group_by = (
+            get_scst_group_by_query(
+                request
+            )
+        )
+
+        group_value = (
+            get_scst_group_value_query(
+                request
+            )
+        )
+
+        group_by = (
+            validate_scst_dataset_group_by(
+                dataset_name=dataset_name,
+                group_by=group_by,
+            )
+        )
+
+        annotation_dir = (
+            resolve_scst_dataset_group_annotation_dir(
+                dataset_name=dataset_name,
+                group_by=group_by,
+                data_type=data_type,
+            )
+        )
+
+        survival_file = (
+            get_scst_dataset_survival_file_path(
+                annotation_dir=annotation_dir,
+                dataset_name=dataset_name,
+                group_value=group_value,
+            )
+        )
+
+        return {
+            "dataset_name": dataset_name,
+            "data_type": data_type,
+
+            "group_by": group_by,
+            "group_type": None,
+            "group_value": group_value,
+
+            "annotation_dir_name": (
+                annotation_dir.name
+            ),
+
+            # SC/ST filenames are group-value based.
+            # Keep the dataset name as the informational prefix.
+            "annotation_file_prefix": (
+                dataset_name
+            ),
+
+            "annotation_dir": (
+                annotation_dir
+            ),
+
+            "survival_file": (
+                survival_file
+            ),
+        }
+
+    def get_base_response(
+        self,
+        context: dict,
+    ) -> dict:
+        response_data = (
+            super().get_base_response(
+                context
+            )
+        )
+
+        response_data.update(
+            {
+                "data_type": (
+                    context.get(
+                        "data_type"
+                    )
+                ),
+                "group_value": (
+                    context.get(
+                        "group_value"
+                    )
+                ),
+            }
+        )
+
+        return response_data

@@ -9,6 +9,7 @@ from rest_framework import status
 from analysis.utils.workflow_detail_utils.workflow_log2fc_background_utils import (
     PAIRED_COHORT_VALID_BACKGROUND_TYPES,
     HYBRID_REFERENCE_VALID_BACKGROUND_TYPES,
+    SCST_HYBRID_REFERENCE_VALID_BACKGROUND_TYPES,
     WORKFLOW_LOG2FC_X_COL,
     WORKFLOW_LOG2FC_Y_COL,
     WorkflowLog2FCBackgroundInputError,
@@ -25,6 +26,15 @@ from database.utils.dataset_annotation_utils.path_utils import (
     resolve_timedb_annotation_dir_name,
     get_dataset_annotation_log2fc_background_file_path, get_timedb_group_type_query,
     resolve_timedb_group_annotation_dir_name, resolve_timedb_group_annotation_file_prefix,
+)
+
+from database.utils.dataset_annotation_utils.scst_path_utils import (
+    get_scst_data_type_query,
+    get_scst_group_by_query,
+    get_scst_group_value_query,
+    validate_scst_dataset_group_by,
+    resolve_scst_dataset_group_annotation_dir,
+    get_scst_dataset_log2fc_background_file_path,
 )
 
 
@@ -86,6 +96,12 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
 
         return group_by or None
 
+    def get_data_type(self, request):
+        return None
+
+    def get_group_value(self, request):
+        return None
+
     def get_annotation_dir_name(
             self,
             *,
@@ -112,7 +128,10 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
             self,
             *,
             dataset_name: str,
+            group_by: str | None = None,
             group_type: str | None = None,
+            data_type: str | None = None,
+            group_value: str | None = None,
     ) -> dict:
         annotation_dir_name = self.get_annotation_dir_name(
             dataset_name=dataset_name,
@@ -158,6 +177,8 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
             dataset_name = get_dataset_query_name(request)
             group_by = self.get_group_by(request)
             group_type = self.get_group_type(request)
+            data_type = self.get_data_type(request)
+            group_value = self.get_group_value(request)
 
             requested_type = request.query_params.get("type", None)
 
@@ -170,7 +191,10 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
             try:
                 context = self.resolve_annotation_context(
                     dataset_name=dataset_name,
+                    group_by=group_by,
                     group_type=group_type,
+                    data_type=data_type,
+                    group_value=group_value,
                 )
 
                 background_file, df = read_log2fc_background_file_by_path(
@@ -233,8 +257,10 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
                 "success": True,
                 "source": self.source,
                 "dataset_name": context["dataset_name"],
+                "data_type": data_type,
                 "group_by": group_by,
                 "group_type": group_type,
+                "group_value": group_value,
                 "annotation_dir_name": context["annotation_dir_name"],
                 "annotation_file_prefix": context[
                     "annotation_file_prefix"
@@ -255,6 +281,27 @@ class BaseDatasetAnnotationLog2FCCorrelationView(APIView):
             return Response(
                 result,
                 status=status.HTTP_200_OK,
+            )
+
+        except (
+            DatasetAnnotationInputError,
+            DatasetAnnotationPathError,
+            WorkflowLog2FCBackgroundInputError,
+            ValueError,
+        ) as e:
+            return Response(
+                {
+                    "detail": str(e),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except FileNotFoundError as e:
+            return Response(
+                {
+                    "detail": str(e),
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         except Exception as e:
@@ -340,3 +387,86 @@ class TIMEDBDatasetAnnotationLog2FCCorrelationView(
             dataset_name=dataset_name,
             group_type=group_type,
         )
+
+class SCSTDatasetAnnotationLog2FCCorrelationView(
+    BaseDatasetAnnotationLog2FCCorrelationView
+):
+    """
+    SC/ST Dataset Annotation log2FC background correlation.
+
+    Query params:
+        dataset: required
+        data_type: required, sc | st
+        group_by: required
+        group_value: required
+        type: optional
+
+    File:
+        {dataset}_ceRNA_{group_value}_background.csv
+
+    Plot mapping:
+        x = ceRNA_log2FC
+        y = miRNA_log2FC
+
+    Valid interaction types:
+        miRNA-mRNA
+        miRNA-lncRNA
+
+    When `type` is omitted, the base view selects the first supported
+    interaction type actually present in the current background file.
+    """
+
+    source = "SCST"
+    network_source_task_type = "SCSTHybridReferenceTask"
+
+    valid_background_types = (
+        SCST_HYBRID_REFERENCE_VALID_BACKGROUND_TYPES
+    )
+
+    def get_data_type(self, request):
+        return get_scst_data_type_query(request)
+
+    def get_group_by(self, request):
+        return get_scst_group_by_query(request)
+
+    def get_group_value(self, request):
+        return get_scst_group_value_query(request)
+
+    def resolve_annotation_context(
+        self,
+        *,
+        dataset_name: str,
+        group_by: str | None = None,
+        group_type: str | None = None,
+        data_type: str | None = None,
+        group_value: str | None = None,
+    ) -> dict:
+        group_by = validate_scst_dataset_group_by(
+            dataset_name=dataset_name,
+            group_by=group_by,
+        )
+
+        annotation_dir = (
+            resolve_scst_dataset_group_annotation_dir(
+                dataset_name=dataset_name,
+                group_by=group_by,
+                data_type=data_type,
+            )
+        )
+
+        background_file = (
+            get_scst_dataset_log2fc_background_file_path(
+                annotation_dir=annotation_dir,
+                dataset_name=dataset_name,
+                group_value=group_value,
+            )
+        )
+
+        return {
+            "dataset_name": dataset_name,
+            "group_type": None,
+            "annotation_dir_name": annotation_dir.name,
+            "annotation_file_prefix": dataset_name,
+            "annotation_dir": annotation_dir,
+            "background_file": background_file,
+        }
