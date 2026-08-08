@@ -15,7 +15,6 @@ set -Eeuo pipefail
 #   <dataset> \
 #   <data_type> \
 #   <exp_file> \
-#   <meta_file> \
 #   <tcga_type> \
 #   <lncrna_type> \
 #   <outdir> \
@@ -26,7 +25,7 @@ set -Eeuo pipefail
 #   <use_padj>
 
 
-if [ "$#" -ne 13 ]; then
+if [ "$#" -ne 12 ]; then
     echo "Error: Invalid number of arguments."
     echo
     echo "Usage:"
@@ -35,7 +34,6 @@ if [ "$#" -ne 13 ]; then
     echo "    <dataset> \\"
     echo "    <data_type> \\"
     echo "    <exp_file> \\"
-    echo "    <meta_file> \\"
     echo "    <tcga_type> \\"
     echo "    <lncrna_type> \\"
     echo "    <outdir> \\"
@@ -52,15 +50,14 @@ uuid="$1"
 dataset="$2"
 data_type="$3"
 exp_file="$4"
-meta_file="$5"
-tcga_type="$6"
-lncrna_type="$7"
-outdir="$8"
-group_col="$9"
-logfc_cutoff_mrna="${10}"
-padj_cutoff_mrna="${11}"
-map_info_csv="${12}"
-use_padj="${13}"
+tcga_type="$5"
+lncrna_type="$6"
+outdir="$7"
+group_col="$8"
+logfc_cutoff_mrna="${9}"
+padj_cutoff_mrna="${10}"
+map_info_csv="${11}"
+use_padj="${12}"
 
 
 # Adjust this path to the actual deployment directory.
@@ -116,7 +113,6 @@ echo "UUID: ${uuid}"
 echo "dataset: ${dataset}"
 echo "data_type: ${data_type}"
 echo "exp_file: ${exp_file}"
-echo "meta_file: ${meta_file}"
 echo "tcga_type: ${tcga_type}"
 echo "lncrna_type: ${lncrna_type}"
 echo "outdir: ${outdir}"
@@ -145,22 +141,13 @@ if [ ! -f "${exp_file}" ]; then
 fi
 
 
-if [ ! -f "${meta_file}" ]; then
-    fail_task "meta_file does not exist: ${meta_file}"
-fi
-
-
 if [ ! -f "${map_info_csv}" ]; then
     fail_task "map_info_csv does not exist: ${map_info_csv}"
 fi
 
 
 case "${data_type}" in
-    sc)
-        expected_id_column="cell_id"
-        ;;
-    st)
-        expected_id_column="spot_id"
+    sc|st)
         ;;
     *)
         fail_task \
@@ -177,21 +164,11 @@ fi
 
 
 case "${exp_file,,}" in
-    *.parquet)
+    *.h5ad)
         ;;
     *)
         fail_task \
-            "Invalid exp_file extension: ${exp_file}. Expected a .parquet file."
-        ;;
-esac
-
-
-case "${meta_file,,}" in
-    *.csv)
-        ;;
-    *)
-        fail_task \
-            "Invalid meta_file extension: ${meta_file}. Expected a .csv file."
+            "Invalid exp_file extension: ${exp_file}. Expected a .h5ad file."
         ;;
 esac
 
@@ -206,7 +183,6 @@ if [ -z "${group_col}" ]; then
 fi
 
 
-echo "Expected identifier column/index: ${expected_id_column}"
 echo "Running run_sc_st.sh..."
 
 
@@ -215,7 +191,6 @@ set +e
 bash "${target_script}" \
     "${dataset}" \
     "${exp_file}" \
-    "${meta_file}" \
     "${tcga_type}" \
     "${lncrna_type}" \
     "${outdir}" \

@@ -107,17 +107,14 @@ SCST_HYBRID_REFERENCE_MRNA_GSEA_REQUIRED_COLUMNS = DEG_PATHWAY_REQUIRED_COLUMNS
 
 SCST_HYBRID_REFERENCE_ALLOWED_FILE_FIELDS = [
     "exp_file",
-    "meta_file",
 ]
 
 SCST_HYBRID_REFERENCE_INPUT_FILENAME_MAP = {
-    "exp_file": "expression.parquet",
-    "meta_file": "meta.csv",
+    "exp_file": "expression.h5ad",
 }
 
 SCST_HYBRID_REFERENCE_ALLOWED_FILE_SUFFIXES = {
-    "exp_file": {".parquet"},
-    "meta_file": {".csv"},
+    "exp_file": {".h5ad"},
 }
 
 SCST_HYBRID_REFERENCE_VALID_DATA_TYPES = [
@@ -1175,72 +1172,99 @@ def read_scst_meta_identifiers(
 
 
 def validate_scst_hybrid_reference_file_contents(task) -> dict:
+    """
+    Validate the uploaded SC/ST AnnData file.
+
+    Requirements:
+    - exp_file must be a readable H5AD file.
+    - the AnnData object must contain at least one observation and one variable.
+    - task.group_col must exist in adata.obs.
+
+    The H5AD observation index (adata.obs_names) is treated as the
+    cell/spot identifier source. No separate metadata file is required.
+    """
     input_files = validate_scst_hybrid_reference_input_files(task)
+    exp_file = input_files["exp_file"]
 
-    expected_id_column = get_scst_expected_id_column(
-        task.data_type
-    )
+    group_col = str(
+        getattr(task, "group_col", "") or ""
+    ).strip()
 
-    exp_schema = validate_scst_expression_parquet_schema(
-        file_path=input_files["exp_file"],
-        expected_id_column=expected_id_column,
-    )
-
-    meta_columns = validate_scst_meta_csv_schema(
-        file_path=input_files["meta_file"],
-        expected_id_column=expected_id_column,
-        group_col=task.group_col,
-    )
-
-    expression_identifiers = (
-        read_scst_parquet_identifier_set(
-            file_path=input_files["exp_file"],
-            id_column=expected_id_column,
-        )
-    )
-
-    meta_identifiers = read_scst_meta_identifiers(
-        file_path=input_files["meta_file"],
-        id_column=expected_id_column,
-        group_col=task.group_col,
-    )
-
-    missing_in_expression = sorted(
-        meta_identifiers - expression_identifiers
-    )
-
-    missing_in_meta = sorted(
-        expression_identifiers - meta_identifiers
-    )
-
-    if missing_in_expression:
+    if not group_col:
         raise SCSTHybridReferenceTaskInputError(
-            f"Some '{expected_id_column}' values in "
-            "meta_file are not present in exp_file: "
-            f"{', '.join(missing_in_expression[:10])}."
+            "Missing field: group_col."
         )
 
-    if missing_in_meta:
+    try:
+        import anndata as ad
+    except ImportError as exc:
         raise SCSTHybridReferenceTaskInputError(
-            f"Some '{expected_id_column}' values in "
-            "exp_file are not present in meta_file: "
-            f"{', '.join(missing_in_meta[:10])}."
+            "Backend dependency 'anndata' is required to "
+            "validate SC/ST H5AD input files."
+        ) from exc
+
+    adata = None
+
+    try:
+        adata = ad.read_h5ad(
+            exp_file,
+            backed="r",
         )
 
-    return {
-        **input_files,
-        "id_column": expected_id_column,
-        "id_storage": exp_schema["id_storage"],
-        "exp_columns": exp_schema["columns"],
-        "expression_columns": (
-            exp_schema["expression_columns"]
-        ),
-        "meta_columns": meta_columns,
-        "sample_count": len(expression_identifiers),
-        "expression_feature_count": len(
-            exp_schema["expression_columns"]
-        ),
-    }
+        if adata.n_obs <= 0:
+            raise SCSTHybridReferenceTaskInputError(
+                "exp_file contains no observations/cells/spots."
+            )
+
+        if adata.n_vars <= 0:
+            raise SCSTHybridReferenceTaskInputError(
+                "exp_file contains no variables/genes."
+            )
+
+        if group_col not in adata.obs.columns:
+            available_columns = [
+                str(column)
+                for column in adata.obs.columns
+            ]
+
+            preview = ", ".join(available_columns[:20])
+            if len(available_columns) > 20:
+                preview += ", ..."
+
+            raise SCSTHybridReferenceTaskInputError(
+                "H5AD adata.obs is missing group column: "
+                f"'{group_col}'. "
+                "Available obs columns: "
+                f"{preview or 'none'}."
+            )
+
+        return {
+            **input_files,
+            "id_column": "obs_names",
+            "id_storage": "adata.obs_names",
+            "obs_columns": [
+                str(column)
+                for column in adata.obs.columns
+            ],
+            "sample_count": int(adata.n_obs),
+            "expression_feature_count": int(adata.n_vars),
+        }
+
+    except SCSTHybridReferenceTaskInputError:
+        raise
+
+    except Exception as exc:
+        raise SCSTHybridReferenceTaskInputError(
+            f"Invalid or unreadable H5AD file: {exp_file.name}. "
+            f"{exc}"
+        ) from exc
+
+    finally:
+        if (
+            adata is not None
+            and getattr(adata, "isbacked", False)
+        ):
+            adata.file.close()
 
 
 def validate_scst_hybrid_reference_task_params(
@@ -1273,12 +1297,17 @@ def validate_scst_hybrid_reference_task_params(
             f"{', '.join(HYBRID_REFERENCE_VALID_LNCRNA_TYPES)}."
         )
 
+    group_col = str(group_col or "").strip()
+
     if not group_col:
         raise SCSTHybridReferenceTaskInputError(
             "Missing field: group_col."
         )
 
-    validate_safe_name(group_col, "group_col")
+    if len(group_col) > 128:
+        raise SCSTHybridReferenceTaskInputError(
+            "group_col must be no more than 128 characters."
+        )
 
     if not isinstance(use_padj, bool):
         raise SCSTHybridReferenceTaskInputError(

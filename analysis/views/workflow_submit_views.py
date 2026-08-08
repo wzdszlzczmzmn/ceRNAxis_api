@@ -1014,12 +1014,10 @@ class SCSTHybridReferenceTaskSubmitView(APIView):
                 )
 
                 task.exp_file = saved_files["exp_file"]
-                task.meta_file = saved_files["meta_file"]
 
                 task.save(
                     update_fields=[
                         "exp_file",
-                        "meta_file",
                     ]
                 )
 
@@ -1082,7 +1080,6 @@ class SCSTHybridReferenceTaskSubmitView(APIView):
                         "use_padj": task.use_padj,
                         "files": {
                             "exp_file": task.exp_file,
-                            "meta_file": task.meta_file,
                         },
                         "cutoffs": {
                             "mRNA": {

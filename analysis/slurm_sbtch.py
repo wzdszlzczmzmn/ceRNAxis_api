@@ -4,7 +4,7 @@ from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferen
 from analysis.utils.custom_list_query_task_utils import get_task_output_dir
 from analysis.utils.hybrid_reference_task_utils import validate_hybrid_reference_input_files, \
     get_hybrid_reference_task_output_dir, HYBRID_REFERENCE_VALID_TCGA_TYPES, HYBRID_REFERENCE_VALID_LNCRNA_TYPES, \
-    HYBRID_REFERENCE_VALID_DEG_METHODS, SCST_HYBRID_REFERENCE_ID_COLUMN_MAP, SCST_HYBRID_REFERENCE_VALID_DATA_TYPES, \
+    HYBRID_REFERENCE_VALID_DEG_METHODS, SCST_HYBRID_REFERENCE_VALID_DATA_TYPES, \
     get_scst_hybrid_reference_task_output_dir, validate_scst_hybrid_reference_input_files
 from analysis.utils.immune_annotation_path_utils import validate_immune_annotation_file
 from analysis.utils.paired_cohort_task_utils import validate_paired_cohort_input_files, \
@@ -460,16 +460,15 @@ def sbatch_scst_hybrid_reference_task(task_uuid) -> dict:
         1. uuid
         2. dataset
         3. data_type
-        4. exp_file
-        5. meta_file
-        6. tcga_type
-        7. lncrna_type
-        8. outdir
-        9. group_col
-        10. logfc_cutoff_mrna
-        11. padj_cutoff_mrna
-        12. map_info_csv
-        13. use_padj
+        4. exp_file (.h5ad)
+        5. tcga_type
+        6. lncrna_type
+        7. outdir
+        8. group_col
+        9. logfc_cutoff_mrna
+        10. padj_cutoff_mrna
+        11. map_info_csv
+        12. use_padj
     """
 
     try:
@@ -562,24 +561,6 @@ def sbatch_scst_hybrid_reference_task(task_uuid) -> dict:
                 "reference task."
             )
 
-        expected_id_column = (
-            SCST_HYBRID_REFERENCE_ID_COLUMN_MAP.get(
-                task.data_type
-            )
-        )
-
-        if not expected_id_column:
-            raise ValueError(
-                "Unable to determine identifier column "
-                f"for data_type: {task.data_type}."
-            )
-
-        if group_col == expected_id_column:
-            raise ValueError(
-                "group_col cannot be the identifier column "
-                f"'{expected_id_column}'."
-            )
-
         if task.logfc_cutoff_mrna < 0:
             raise ValueError(
                 "logfc_cutoff_mrna must be greater than "
@@ -626,7 +607,6 @@ def sbatch_scst_hybrid_reference_task(task_uuid) -> dict:
         dataset,
         task.data_type,
         str(input_files["exp_file"]),
-        str(input_files["meta_file"]),
         task.tcga_type,
         task.lncrna_type,
         str(output_dir),
