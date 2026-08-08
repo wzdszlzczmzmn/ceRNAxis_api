@@ -317,17 +317,20 @@ def validate_scst_hybrid_reference_group_value(
 
 def get_scst_hybrid_reference_expression_file_path(task) -> Path:
     """
-    Return the expression.h5ad path for an SC/ST Hybrid Reference task.
+    Return the resolved expression.h5ad path for an SC/ST Hybrid Reference task.
 
-    Expected location:
-        {task_workspace}/input/expression.h5ad
-
-    The expression file is expected to be in the same input directory
-    as meta.csv.
+    SC/ST is now H5AD-only, so resolve the uploaded input directly from
+    the current SC/ST input-file mapping using field_name="exp_file".
     """
-    meta_file_path = get_scst_hybrid_reference_meta_file_path(task)
-
-    return meta_file_path.parent / "expression.h5ad"
+    try:
+        return get_scst_hybrid_reference_input_file_path(
+            task=task,
+            field_name="exp_file",
+        )
+    except SCSTHybridReferenceTaskPathError as exc:
+        raise WorkflowVizInfoPathError(
+            str(exc)
+        ) from exc
 
 
 def validate_scst_hybrid_reference_expression_file(task) -> Path:

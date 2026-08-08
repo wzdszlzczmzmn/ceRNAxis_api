@@ -18,7 +18,7 @@ from analysis.utils.hybrid_reference_task_utils import (
     build_scst_hybrid_reference_survival_km_data,
 )
 from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import WorkflowVizInfoPathError, \
-    WorkflowVizInfoInputError, validate_scst_hybrid_reference_group_value
+    WorkflowVizInfoInputError, validate_scst_hybrid_reference_h5ad_group_value
 
 
 class BaseWorkflowSurvivalKMDataView(APIView):
@@ -272,7 +272,7 @@ class SCSTHybridReferenceSurvivalKMDataView(
             )
 
         group_value = (
-            validate_scst_hybrid_reference_group_value(
+            validate_scst_hybrid_reference_h5ad_group_value(
                 task=task,
                 group_value=group_value,
             )

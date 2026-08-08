@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import get_scst_hybrid_reference_group_info, \
-    WorkflowVizInfoPathError, WorkflowVizInfoInputError
+from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import WorkflowVizInfoPathError, \
+    WorkflowVizInfoInputError, get_scst_hybrid_reference_h5ad_group_info
 
 WORKFLOW_EXP_CORRELATION_FILENAME_SUFFIX = "_ceRNA_corr.csv"
 
@@ -778,7 +778,7 @@ def get_required_scst_group_value(
 
     try:
         group_info = (
-            get_scst_hybrid_reference_group_info(
+            get_scst_hybrid_reference_h5ad_group_info(
                 task
             )
         )

@@ -8,7 +8,7 @@ from django.utils.dateparse import parse_datetime
 from analysis.models import SCSTHybridReferenceTask
 
 
-DEMO_UUID = "df188272-9496-410a-8f28-ebef7bcdb672"
+DEMO_UUID = "65f4f05b-1fd6-4655-8a93-c1011a513a2c"
 DEMO_USER = ""
 DEMO_TASK_NAME = "demo_task"
 DEMO_STATUS = SCSTHybridReferenceTask.Status.Success
@@ -17,8 +17,8 @@ DEMO_DATA_TYPE = SCSTHybridReferenceTask.DataType.SC
 DEMO_TCGA_TYPE = "TCGA_BRCA"
 DEMO_LNCRNA_TYPE = SCSTHybridReferenceTask.LncRNAType.log2tpm
 
-DEMO_EXP_FILE = "expression.parquet"
-DEMO_META_FILE = "meta.csv"
+DEMO_EXP_FILE = "expression.h5ad"
+DEMO_META_FILE = ""
 DEMO_GROUP_COL = "Celltype (malignancy)"
 
 DEMO_MAP_INFO = "ImmiRImmiR_BRCA"
@@ -27,8 +27,8 @@ DEMO_USE_PADJ = False
 DEMO_LOGFC_CUTOFF_MRNA = 1e-6
 DEMO_PADJ_CUTOFF_MRNA = 0.3
 
-DEMO_CREATE_TIME = "2026-07-23T14:33:31.464Z"
-DEMO_FINISH_TIME = "2026-07-23T15:21:38Z"
+DEMO_CREATE_TIME = "2026-08-08T15:25:58.246846+00:00"
+DEMO_FINISH_TIME = "2026-08-08T16:20:22+00:00"
 
 
 def parse_task_datetime(
@@ -154,20 +154,20 @@ class Command(BaseCommand):
         parser.add_argument(
             "--exp-file",
             default=DEMO_EXP_FILE,
-            help="Stored SC/ST expression filename.",
+            help="Stored SC/ST AnnData H5AD filename.",
         )
 
         parser.add_argument(
             "--meta-file",
             default=DEMO_META_FILE,
-            help="Stored metadata filename.",
+            help="Stored metadata filename. Empty for H5AD-only SC/ST input.",
         )
 
         parser.add_argument(
             "--group-col",
             default=DEMO_GROUP_COL,
             help=(
-                "Metadata column used to group cells "
+                "adata.obs column used to group cells "
                 "or spatial observations."
             ),
         )

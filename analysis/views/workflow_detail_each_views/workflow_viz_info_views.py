@@ -20,7 +20,7 @@ from analysis.utils.workflow_detail_utils.workflow_network_view_utils import (
 from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import (
     WorkflowVizInfoInputError,
     WorkflowVizInfoPathError,
-    get_scst_hybrid_reference_group_info,
+    get_scst_hybrid_reference_h5ad_group_info,
 )
 
 
@@ -64,7 +64,7 @@ class SCSTHybridReferenceVizInfoView(APIView):
             )
 
             try:
-                group_info = get_scst_hybrid_reference_group_info(
+                group_info = get_scst_hybrid_reference_h5ad_group_info(
                     task
                 )
 
