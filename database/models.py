@@ -730,6 +730,8 @@ class AxisRecurrentSummary(models.Model):
 class AxisDatasetSource(models.TextChoices):
     TCGA = "TCGA", "TCGA"
     TIMEDB = "TIMEDB", "TIMEDB"
+    SC = "SC", "SC"
+    ST = "ST", "ST"
 
 
 class AxisModule(models.TextChoices):
@@ -763,15 +765,34 @@ class CanonicalAxisType(models.TextChoices):
 
 class AxisDatasetContext(models.Model):
     """
-    One dataset/grouping context that may contain multiple Axis result types.
+    One dataset/grouping context containing imported Axis results.
 
-    Module 2:
-        dataset_name must reference a DatasetMetadata.dataset value such as:
-            TCGA_ACC_mRNA
+    Context semantics:
 
-    Module 3:
-        dataset_name references a DatasetMetadata.dataset value such as:
-            GSE20194
+    TCGA:
+        module2
+        group_type = none
+        group_by = ""
+        group_value = ""
+
+    TIMEDB:
+        module3
+        group_type = other / grade / stage
+        group_value = ""
+
+    SC:
+        module3
+        DatasetMetadata.obs_type = cell
+        group_type = other
+        group_by required
+        group_value required
+
+    ST:
+        module3
+        DatasetMetadata.obs_type = spot
+        group_type = other
+        group_by required
+        group_value required
     """
 
     dataset_source = models.CharField(
@@ -810,6 +831,13 @@ class AxisDatasetContext(models.Model):
         db_index=True,
     )
 
+    group_value = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
     annotation_dir_name = models.CharField(
         max_length=255,
         blank=True,
@@ -841,9 +869,10 @@ class AxisDatasetContext(models.Model):
                     "dataset_metadata",
                     "group_type",
                     "group_by",
+                    "group_value",
                 ],
                 name="uniq_axis_dataset_context",
-            ),
+            )
         ]
 
         indexes = [
@@ -880,21 +909,124 @@ class AxisDatasetContext(models.Model):
         errors = {}
         dataset_name = self.dataset_name
 
-        if self.module == AxisModule.MODULE2:
+        dataset_metadata = (
+            self.dataset_metadata
+            if self.dataset_metadata_id
+            else None
+        )
+
+        obs_type = (
+            dataset_metadata.obs_type
+            if dataset_metadata
+            else ""
+        )
+
+        # -------------------------
+        # TCGA / Module 2
+        # -------------------------
+
+        if self.dataset_source == AxisDatasetSource.TCGA:
+            if self.module != AxisModule.MODULE2:
+                errors["module"] = (
+                    "TCGA context must use module='module2'."
+                )
+
             if not dataset_name.endswith("_mRNA"):
                 errors["dataset_metadata"] = (
-                    "Module 2 context must reference a "
+                    "TCGA context must reference a "
                     "DatasetMetadata.dataset ending with '_mRNA'."
                 )
 
             if self.group_type != AxisGroupType.NONE:
                 errors["group_type"] = (
-                    "Module 2 context must use group_type='none'."
+                    "TCGA context must use group_type='none'."
                 )
 
             if self.group_by:
                 errors["group_by"] = (
-                    "Module 2 context must use an empty group_by value."
+                    "TCGA context must use an empty group_by value."
+                )
+
+            if self.group_value:
+                errors["group_value"] = (
+                    "TCGA context must use an empty group_value value."
+                )
+
+        # -------------------------
+        # TIMEDB
+        # -------------------------
+
+        if self.dataset_source == AxisDatasetSource.TIMEDB:
+            if self.module != AxisModule.MODULE3:
+                errors["module"] = (
+                    "TIMEDB context must use module='module3'."
+                )
+
+            if self.group_value:
+                errors["group_value"] = (
+                    "TIMEDB context must use an empty group_value value."
+                )
+
+        # -------------------------
+        # SC
+        # -------------------------
+
+        if self.dataset_source == AxisDatasetSource.SC:
+            if self.module != AxisModule.MODULE3:
+                errors["module"] = (
+                    "SC context must use module='module3'."
+                )
+
+            if obs_type != "cell":
+                errors["dataset_metadata"] = (
+                    "SC context must reference a dataset "
+                    "with obs_type='cell'."
+                )
+
+            if self.group_type != AxisGroupType.OTHER:
+                errors["group_type"] = (
+                    "SC context must use group_type='other'."
+                )
+
+            if not self.group_by:
+                errors["group_by"] = (
+                    "SC context requires a group_by value."
+                )
+
+            if not self.group_value:
+                errors["group_value"] = (
+                    "SC context requires a group_value value."
+                )
+
+        # -------------------------
+        # ST
+        # -------------------------
+
+        if self.dataset_source == AxisDatasetSource.ST:
+            if self.module != AxisModule.MODULE3:
+                errors["module"] = (
+                    "ST context must use module='module3'."
+                )
+
+            if obs_type != "spot":
+                errors["dataset_metadata"] = (
+                    "ST context must reference a dataset "
+                    "with obs_type='spot'."
+                )
+
+            if self.group_type != AxisGroupType.OTHER:
+                errors["group_type"] = (
+                    "ST context must use group_type='other'."
+                )
+
+            if not self.group_by:
+                errors["group_by"] = (
+                    "ST context requires a group_by value."
+                )
+
+            if not self.group_value:
+                errors["group_value"] = (
+                    "ST context requires a group_value value."
                 )
 
         if errors:
@@ -1006,6 +1138,23 @@ class AxisResultArtifact(models.Model):
             f"{self.file_name}"
         )
 
+    def clean(self):
+        super().clean()
+
+        errors = {}
+
+        if (
+                self.context_id
+                and self.context.dataset_source in {AxisDatasetSource.SC, AxisDatasetSource.ST, }
+                and self.result_kind != AxisResultKind.AXIS_FINAL
+        ):
+            errors["result_kind"] = (
+                "SC/ST contexts only support axis_final artifacts."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
 
 class CanonicalAxis(models.Model):
     """
@@ -1077,15 +1226,15 @@ class CanonicalAxis(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    Q(miRNA__gt="")
-                    & Q(mRNA__gt="")
+                        Q(miRNA__gt="")
+                        & Q(mRNA__gt="")
                 ),
                 name="axis_need_mirna_mrna",
             ),
             models.CheckConstraint(
                 condition=(
-                    Q(lncRNA="")
-                    | Q(circRNA="")
+                        Q(lncRNA="")
+                        | Q(circRNA="")
                 ),
                 name="axis_one_cerna_kind",
             ),
@@ -1276,9 +1425,9 @@ class AxisFinalEvidence(models.Model):
         super().clean()
 
         if (
-            self.observation_id
-            and self.observation.artifact.result_kind
-            != AxisResultKind.AXIS_FINAL
+                self.observation_id
+                and self.observation.artifact.result_kind
+                != AxisResultKind.AXIS_FINAL
         ):
             raise ValidationError({
                 "observation": (
@@ -1340,9 +1489,9 @@ class SpongeEvidence(models.Model):
         super().clean()
 
         if (
-            self.observation_id
-            and self.observation.artifact.result_kind
-            != AxisResultKind.SPONGE
+                self.observation_id
+                and self.observation.artifact.result_kind
+                != AxisResultKind.SPONGE
         ):
             raise ValidationError({
                 "observation": (
@@ -1468,10 +1617,20 @@ class AxisStructureRecurrentSummary(models.Model):
         default=0,
         db_index=True,
     )
+    sc_dataset_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
+    st_dataset_count = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+    )
 
     # Context counts by source
     tcga_context_count = models.PositiveIntegerField(default=0)
     timedb_context_count = models.PositiveIntegerField(default=0)
+    sc_context_count = models.PositiveIntegerField(default=0)
+    st_context_count = models.PositiveIntegerField(default=0)
 
     # Context counts by module
     module2_context_count = models.PositiveIntegerField(default=0)

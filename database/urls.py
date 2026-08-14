@@ -37,6 +37,11 @@ urlpatterns = [
         dataset_views.TIMEDBAnnotationDownloadView.as_view(),
         name="timedb-annotation-download",
     ),
+    path(
+        "scst_annotation_download/",
+        dataset_views.SCSTAnnotationDownloadView.as_view(),
+        name="scst-annotation-download",
+    ),
 
     # Sample Meta Views
     path('dataset_metadata/<str:dataset>/sample_meta/', dataset_views.DatasetSampleMetaView.as_view(),

@@ -3,13 +3,14 @@ from typing import Callable
 
 from django.db import models
 
-from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask
+from analysis.models import CustomListQueryTask, PairedCohortTask, HybridReferenceTask, SCSTHybridReferenceTask
 
 from .resolvers import (
     build_custom_list_query_archive_name,
     build_paired_cohort_archive_name,
     resolve_custom_list_query_result_files,
     resolve_paired_cohort_result_files, resolve_hybrid_reference_result_files, build_hybrid_reference_archive_name,
+    resolve_scst_hybrid_reference_result_files, build_scst_hybrid_reference_archive_name,
 )
 
 
@@ -39,6 +40,12 @@ TASK_DOWNLOAD_REGISTRY = [
         model=HybridReferenceTask,
         result_file_resolver=resolve_hybrid_reference_result_files,
         archive_name_builder=build_hybrid_reference_archive_name,
+    ),
+    TaskDownloadConfig(
+        task_type="SCSTHybridReferenceTask",
+        model=SCSTHybridReferenceTask,
+        result_file_resolver=resolve_scst_hybrid_reference_result_files,
+        archive_name_builder=build_scst_hybrid_reference_archive_name,
     ),
 ]
 

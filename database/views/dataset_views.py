@@ -11,7 +11,7 @@ from rest_framework import status
 from database.models import DatasetMetadata
 from database.serializers.dataset_serializers import DatasetMetadataSerializer
 from database.services.dataset_download.service import prepare_dataset_download, prepare_tcga_annotation_download, \
-    prepare_timedb_annotation_download
+    prepare_timedb_annotation_download, prepare_scst_annotation_download
 from database.utils.expression_file_utils import (
     MAX_SELECTED_GENES,
     DEFAULT_EXPRESSION_FILE_FORMAT,
@@ -1730,6 +1730,19 @@ class TIMEDBAnnotationDownloadView(APIView):
         dataset = request.query_params.get("dataset")
 
         result = prepare_timedb_annotation_download(dataset)
+
+        return FileResponse(
+            open(result.archive_path, "rb"),
+            as_attachment=True,
+            filename=result.archive_name,
+        )
+
+
+class SCSTAnnotationDownloadView(APIView):
+    def get(self, request):
+        dataset = request.query_params.get("dataset")
+
+        result = prepare_scst_annotation_download(dataset)
 
         return FileResponse(
             open(result.archive_path, "rb"),

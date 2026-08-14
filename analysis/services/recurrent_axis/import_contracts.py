@@ -13,6 +13,7 @@ class AxisContextSpec:
 
     group_type: str
     group_by: str = ""
+    group_value: str = ""
 
     annotation_dir_name: str = ""
     annotation_file_prefix: str = ""

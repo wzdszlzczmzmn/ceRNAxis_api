@@ -8,7 +8,7 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 from analysis.services.recurrent_axis.import_discovery import (
     build_module2_import_jobs,
     build_module3_import_jobs,
-    import_axis_jobs,
+    import_axis_jobs, build_scst_import_jobs,
 )
 from analysis.services.recurrent_axis.rebuild_summaries import (
     DEFAULT_SUMMARY_VERSION,
@@ -29,28 +29,36 @@ DEFAULT_BATCH_SIZE = 1000
 
 class Command(BaseCommand):
     help = (
-        "Discover, validate, and import recurrent Axis results from Module2 "
-        "and Module3 result directories."
+        "Discover, validate, and import recurrent Axis results from "
+        "Module2, TIMEDB Module3, SC, and ST annotation results."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--module2-root",
-            required=True,
             type=Path,
+            default=None,
             help=(
-                "Module2 result root directory. Its direct child directories "
-                "must be dataset/project directories such as TCGA_ACC."
+                "Optional Module2 result root directory. "
+                "When omitted, Module2 / TCGA results are not imported."
             ),
         )
         parser.add_argument(
             "--module3-root",
-            required=True,
             type=Path,
+            default=None,
             help=(
-                "Module3 result root directory. Its direct child directories "
-                "must be TIMEDB annotation directories such as GSE20194, "
-                "GSE20194_grade, or GSE20194_stage."
+                "Optional Module3 result root directory. "
+                "When omitted, TIMEDB Module3 results are not imported."
+            ),
+        )
+        parser.add_argument(
+            "--include-scst",
+            action="store_true",
+            help=(
+                "Include SC and ST Dataset Annotation Axis Final "
+                "results in this import. SC/ST result directories "
+                "are resolved from the configured dataset annotation settings."
             ),
         )
         parser.add_argument(
@@ -157,14 +165,32 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:
-        module2_root = self._resolve_root_path(
-            options["module2_root"],
-            option_name="--module2-root",
-        )
-        module3_root = self._resolve_root_path(
-            options["module3_root"],
-            option_name="--module3-root",
-        )
+        module2_root = options["module2_root"]
+        module3_root = options["module3_root"]
+        include_scst = options["include_scst"]
+
+        if (
+                module2_root is None
+                and module3_root is None
+                and not include_scst
+        ):
+            raise CommandError(
+                "No import source was selected. "
+                "Provide --module2-root, --module3-root, "
+                "and/or --include-scst."
+            )
+
+        if module2_root is not None:
+            module2_root = self._resolve_root_path(
+                module2_root,
+                option_name="--module2-root",
+            )
+
+        if module3_root is not None:
+            module3_root = self._resolve_root_path(
+                module3_root,
+                option_name="--module3-root",
+            )
 
         batch_size = options["batch_size"]
         if batch_size <= 0:
@@ -196,33 +222,90 @@ class Command(BaseCommand):
                 options["sponge_schema_version"],
         }
 
-        module2_jobs, module2_missing = self._discover_module2(
-            root_dir=module2_root,
-            file_templates=file_templates,
-            schema_versions=schema_versions,
-            result_kinds=result_kinds,
-        )
-        module3_jobs, module3_missing = self._discover_module3(
-            root_dir=module3_root,
-            file_templates=file_templates,
-            schema_versions=schema_versions,
-            result_kinds=result_kinds,
-        )
+        module2_jobs = []
+        module2_missing = []
+
+        module3_jobs = []
+        module3_missing = []
+
+        sc_jobs = []
+        sc_missing = []
+
+        st_jobs = []
+        st_missing = []
+
+        if module2_root is not None:
+            (
+                module2_jobs,
+                module2_missing,
+            ) = self._discover_module2(
+                root_dir=module2_root,
+                file_templates=file_templates,
+                schema_versions=schema_versions,
+                result_kinds=result_kinds,
+            )
+
+        if module3_root is not None:
+            (
+                module3_jobs,
+                module3_missing,
+            ) = self._discover_module3(
+                root_dir=module3_root,
+                file_templates=file_templates,
+                schema_versions=schema_versions,
+                result_kinds=result_kinds,
+            )
+
+        if include_scst:
+            (
+                sc_jobs,
+                sc_missing,
+            ) = self._discover_scst(
+                data_type="sc",
+                schema_version=(
+                    schema_versions[
+                        AxisResultKind.AXIS_FINAL
+                    ]
+                ),
+                result_kinds=result_kinds,
+            )
+
+            (
+                st_jobs,
+                st_missing,
+            ) = self._discover_scst(
+                data_type="st",
+                schema_version=(
+                    schema_versions[
+                        AxisResultKind.AXIS_FINAL
+                    ]
+                ),
+                result_kinds=result_kinds,
+            )
 
         all_jobs = [
             *module2_jobs,
             *module3_jobs,
+            *sc_jobs,
+            *st_jobs,
         ]
+
         all_missing = [
             *module2_missing,
             *module3_missing,
+            *sc_missing,
+            *st_missing,
         ]
 
         self._print_discovery_summary(
             module2_jobs=module2_jobs,
             module3_jobs=module3_jobs,
+            sc_jobs=sc_jobs,
+            st_jobs=st_jobs,
             module2_missing=module2_missing,
             module3_missing=module3_missing,
+            sc_missing=sc_missing,
+            st_missing=st_missing,
         )
 
         if options["strict_missing_files"] and all_missing:
@@ -365,6 +448,35 @@ class Command(BaseCommand):
                 f"Module3 discovery failed: {exc}"
             ) from exc
 
+    def _discover_scst(
+            self,
+            *,
+            data_type: str,
+            schema_version: str,
+            result_kinds: list[str],
+    ):
+        if (
+                AxisResultKind.AXIS_FINAL
+                not in result_kinds
+        ):
+            return [], []
+
+        source_label = (
+            "SC"
+            if data_type == "sc"
+            else "ST"
+        )
+
+        try:
+            return build_scst_import_jobs(
+                data_type=data_type,
+                schema_version=schema_version,
+            )
+        except Exception as exc:
+            raise CommandError(
+                f"{source_label} discovery failed: {exc}"
+            ) from exc
+
     @staticmethod
     def _resolve_root_path(
         path: Path,
@@ -418,29 +530,64 @@ class Command(BaseCommand):
         )
 
     def _print_discovery_summary(
-        self,
-        *,
-        module2_jobs,
-        module3_jobs,
-        module2_missing,
-        module3_missing,
+            self,
+            *,
+            module2_jobs,
+            module3_jobs,
+            sc_jobs,
+            st_jobs,
+            module2_missing,
+            module3_missing,
+            sc_missing,
+            st_missing,
     ) -> None:
         self.stdout.write(
-            self.style.MIGRATE_HEADING("===== discovery =====")
+            self.style.MIGRATE_HEADING(
+                "===== discovery ====="
+            )
         )
-        self.stdout.write(f"Module2 jobs: {len(module2_jobs)}")
-        self.stdout.write(f"Module3 jobs: {len(module3_jobs)}")
+
+        total_jobs = (
+                len(module2_jobs)
+                + len(module3_jobs)
+                + len(sc_jobs)
+                + len(st_jobs)
+        )
+
         self.stdout.write(
-            f"Total jobs:   {len(module2_jobs) + len(module3_jobs)}"
+            f"Module2 jobs: {len(module2_jobs)}"
+        )
+        self.stdout.write(
+            f"Module3 jobs: {len(module3_jobs)}"
+        )
+        self.stdout.write(
+            f"SC jobs:      {len(sc_jobs)}"
+        )
+        self.stdout.write(
+            f"ST jobs:      {len(st_jobs)}"
+        )
+        self.stdout.write(
+            f"Total jobs:   {total_jobs}"
         )
 
         self._print_missing_files(
             title="Module2",
             missing_files=module2_missing,
         )
+
         self._print_missing_files(
             title="Module3",
             missing_files=module3_missing,
+        )
+
+        self._print_missing_files(
+            title="SC",
+            missing_files=sc_missing,
+        )
+
+        self._print_missing_files(
+            title="ST",
+            missing_files=st_missing,
         )
 
     def _print_missing_files(
@@ -463,6 +610,7 @@ class Command(BaseCommand):
                 f"dataset={item['dataset_name']}, "
                 f"group_type={item['group_type']}, "
                 f"group_by={item['group_by']!r}, "
+                f"group_value={item.get('group_value', '')!r}, "
                 f"result_kind={item['result_kind']}, "
                 f"path={item['file_path']}"
             )
@@ -525,6 +673,7 @@ class Command(BaseCommand):
                 "context__dataset_metadata_id",
                 "context__group_type",
                 "context__group_by",
+                "context__group_value",
                 "result_kind",
                 "row_count",
                 "file_name",
@@ -534,6 +683,7 @@ class Command(BaseCommand):
                 "context__dataset_metadata_id",
                 "context__group_type",
                 "context__group_by",
+                "context__group_value",
                 "result_kind",
             )
         )

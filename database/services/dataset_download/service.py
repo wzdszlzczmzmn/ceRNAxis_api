@@ -6,11 +6,16 @@ from pathlib import Path
 from django.conf import settings
 
 from database.models import DatasetMetadata
+from database.utils.dataset_annotation_utils.path_utils import build_timedb_group_by_candidates, \
+    DatasetAnnotationInputError
+from database.utils.dataset_annotation_utils.scst_metadata_utils import read_scst_dataset_group_value_counts
+from database.utils.dataset_annotation_utils.scst_path_utils import validate_scst_group_value_path_component, \
+    should_skip_scst_group_value_for_results, resolve_scst_dataset_group_annotation_dir, validate_scst_data_type, \
+    get_scst_dataset_group_by_fields, get_scst_dataset_meta_file_path
 from database.utils.expression_file_utils import (
     EXPRESSION_TYPES_BY_RNA_TYPE,
     get_expression_csv_file_path, get_timedb_expression_file_path, TIMEDB_EXPRESSION_TYPE,
-    get_expression_mode_from_metadata, get_tisch2_expression_file_path, TISCH2_EXPRESSION_TYPE,
-    get_sctml_expression_file_path,
+    get_expression_mode_from_metadata, TISCH2_EXPRESSION_TYPE,
 )
 from database.utils.meta_file_utils import get_tcga_dataset_meta_file, get_timedb_dataset_meta_file, get_large_meta_file
 from database.utils.viz_file_utils import (
@@ -155,6 +160,7 @@ def prepare_tcga_annotation_download(dataset: str) -> DatasetDownloadResult:
         TCGA_ACC_map_immune_axis.csv
         TCGA_ACC_mRNA_gsea.csv
         TCGA_ACC_survival_analysis.csv
+        TCGA_ACC_sponge_result.csv
         TCGA_ACC_CMdrug_result/
 
     Existing files/directories are packed.
@@ -191,14 +197,18 @@ def prepare_tcga_annotation_download(dataset: str) -> DatasetDownloadResult:
     )
 
     if not downloadable_files:
-        raise DatasetDownloadFileNotFoundError(
-            f"No downloadable annotation files found for dataset '{dataset}'."
+        create_empty_annotation_archive(
+            archive_path=archive_path,
+            archive_root=build_tcga_annotation_archive_root(
+                annotation_prefix
+            ),
+            dataset=dataset,
         )
-
-    create_cached_dataset_archive(
-        archive_path=archive_path,
-        downloadable_files=downloadable_files,
-    )
+    else:
+        create_cached_dataset_archive(
+            archive_path=archive_path,
+            downloadable_files=downloadable_files,
+        )
 
     return DatasetDownloadResult(
         archive_path=archive_path,
@@ -261,20 +271,164 @@ def prepare_timedb_annotation_download(dataset: str) -> DatasetDownloadResult:
     )
 
     if not downloadable_files:
-        raise DatasetDownloadFileNotFoundError(
-            f"No downloadable annotation files found for TIMEDB dataset '{dataset}'."
+        create_empty_annotation_archive(
+            archive_path=archive_path,
+            archive_root=build_timedb_annotation_archive_root(
+                annotation_prefix
+            ),
+            dataset=dataset,
         )
-
-    create_cached_dataset_archive(
-        archive_path=archive_path,
-        downloadable_files=downloadable_files,
-    )
+    else:
+        create_cached_dataset_archive(
+            archive_path=archive_path,
+            downloadable_files=downloadable_files,
+        )
 
     return DatasetDownloadResult(
         archive_path=archive_path,
         archive_name=archive_name,
         dataset=dataset,
     )
+
+
+def prepare_scst_annotation_download(
+    dataset: str,
+) -> DatasetDownloadResult:
+    """
+    Prepare a cached zip archive for SC/ST Dataset Annotation download.
+
+    Supported sources:
+        - TISCH2 -> data_type="sc"
+        - scTML  -> data_type="st"
+
+    Annotation results are grouped by configured group_by fields,
+    with each group-by stored in its own annotation directory.
+
+    Existing files/directories are packed.
+    Missing files/directories are skipped.
+    Generated zip is cached under DATASET_DOWNLOAD_ZIP_DIR.
+    """
+
+    dataset = validate_dataset_param(dataset)
+    metadata = get_dataset_metadata(dataset)
+
+    expression_mode = get_expression_mode_from_metadata(metadata)
+
+    if expression_mode == "tisch2":
+        data_type = "sc"
+    elif expression_mode == "scTML":
+        data_type = "st"
+    else:
+        raise DatasetDownloadNotSupportedError(
+            "SC/ST annotation download is only supported for "
+            "TISCH2 and scTML datasets. "
+            f"Dataset '{dataset}' has expression_mode "
+            f"'{expression_mode}'."
+        )
+
+    archive_name = build_scst_annotation_archive_name(
+        dataset
+    )
+
+    archive_dir = get_dataset_annotation_download_archive_dir()
+
+    archive_path = (
+        archive_dir / archive_name
+    ).resolve()
+
+    validate_output_archive_path(
+        archive_path=archive_path,
+        archive_dir=archive_dir,
+    )
+
+    if archive_path.exists() and archive_path.is_file():
+        return DatasetDownloadResult(
+            archive_path=archive_path,
+            archive_name=archive_name,
+            dataset=dataset,
+        )
+
+    downloadable_files = (
+        resolve_scst_annotation_download_files(
+            dataset_name=dataset,
+            data_type=data_type,
+        )
+    )
+
+    if not downloadable_files:
+        create_empty_annotation_archive(
+            archive_path=archive_path,
+            archive_root=build_scst_annotation_archive_root(
+                dataset
+            ),
+            dataset=dataset,
+        )
+    else:
+        create_cached_dataset_archive(
+            archive_path=archive_path,
+            downloadable_files=downloadable_files,
+        )
+
+    return DatasetDownloadResult(
+        archive_path=archive_path,
+        archive_name=archive_name,
+        dataset=dataset,
+    )
+
+
+def create_empty_annotation_archive(
+    *,
+    archive_path: Path,
+    archive_root: str,
+    dataset: str,
+) -> None:
+    archive_dir = archive_path.parent.resolve()
+
+    temp_archive_path = (
+        archive_dir
+        / f".{archive_path.name}.{uuid_lib.uuid4().hex}.tmp"
+    ).resolve()
+
+    validate_output_archive_path(
+        archive_path=temp_archive_path,
+        archive_dir=archive_dir,
+    )
+
+    try:
+        with zipfile.ZipFile(
+            temp_archive_path,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as zip_file:
+            filename = "NO_AVAILABLE_ANNOTATION_FILES.txt"
+
+            arcname = (
+                f"{archive_root}/{filename}"
+            )
+
+            validate_archive_name(arcname)
+
+            content = (
+                "No downloadable annotation files are currently "
+                f"available for dataset: {dataset}.\n"
+            )
+
+            zip_file.writestr(
+                arcname,
+                content,
+            )
+
+        temp_archive_path.replace(
+            archive_path
+        )
+
+    except Exception as e:
+        if temp_archive_path.exists():
+            temp_archive_path.unlink()
+
+        raise DatasetDownloadArchiveError(
+            f"Failed to create annotation archive: {str(e)}"
+        ) from e
 
 
 def validate_dataset_param(dataset: str) -> str:
@@ -477,7 +631,7 @@ def resolve_tisch2_dataset_download_files(
     TISCH2 dataset download files.
 
     Download rule:
-        {dataset}_exp.parquet
+        {dataset}_sparse.h5ad
         {dataset}_meta.csv
         {dataset}_deg.csv
 
@@ -492,23 +646,22 @@ def resolve_tisch2_dataset_download_files(
 
     downloadable_files: list[DownloadableDatasetFile] = []
 
-    expression_file_path = get_tisch2_expression_file_path(
-        dataset=dataset,
-        rna_type=rna_type,
-    )
-
-    if expression_file_path.exists() and expression_file_path.is_file():
-        downloadable_files.append(
-            DownloadableDatasetFile(
-                path=expression_file_path,
-                arcname=f"{archive_root}/{expression_file_path.name}",
-            )
-        )
-
     meta_file_path = get_large_meta_file(
         dataset=dataset,
         expression_mode=expression_mode,
     )
+
+    sparse_h5ad_path = (
+        meta_file_path.parent / f"{dataset}_sparse.h5ad"
+    ).resolve()
+
+    if sparse_h5ad_path.exists() and sparse_h5ad_path.is_file():
+        downloadable_files.append(
+            DownloadableDatasetFile(
+                path=sparse_h5ad_path,
+                arcname=f"{archive_root}/{sparse_h5ad_path.name}",
+            )
+        )
 
     if meta_file_path.exists() and meta_file_path.is_file():
         downloadable_files.append(
@@ -542,7 +695,7 @@ def resolve_sctml_dataset_download_files(
     scTML dataset download files.
 
     Download rule:
-        {dataset}_exp.parquet
+        {dataset}_sparse.h5ad
         {dataset}_meta.csv
 
     Existing files are packed.
@@ -550,29 +703,27 @@ def resolve_sctml_dataset_download_files(
     """
 
     dataset = metadata.dataset
-    rna_type = metadata.gene_bio_type
     expression_mode = get_expression_mode_from_metadata(metadata)
     archive_root = build_dataset_archive_root(dataset)
 
     downloadable_files: list[DownloadableDatasetFile] = []
 
-    expression_file_path = get_sctml_expression_file_path(
-        dataset=dataset,
-        rna_type=rna_type,
-    )
-
-    if expression_file_path.exists() and expression_file_path.is_file():
-        downloadable_files.append(
-            DownloadableDatasetFile(
-                path=expression_file_path,
-                arcname=f"{archive_root}/{expression_file_path.name}",
-            )
-        )
-
     meta_file_path = get_large_meta_file(
         dataset=dataset,
         expression_mode=expression_mode,
     )
+
+    sparse_h5ad_path = (
+        meta_file_path.parent / f"{dataset}_sparse.h5ad"
+    ).resolve()
+
+    if sparse_h5ad_path.exists() and sparse_h5ad_path.is_file():
+        downloadable_files.append(
+            DownloadableDatasetFile(
+                path=sparse_h5ad_path,
+                arcname=f"{archive_root}/{sparse_h5ad_path.name}",
+            )
+        )
 
     if meta_file_path.exists() and meta_file_path.is_file():
         downloadable_files.append(
@@ -704,6 +855,7 @@ def resolve_tcga_annotation_download_files(
         f"{annotation_prefix}_map_immune_axis.csv",
         f"{annotation_prefix}_mRNA_gsea.csv",
         f"{annotation_prefix}_survival_analysis.csv",
+        f"{annotation_prefix}_sponge_result.csv",
     ]
 
     downloadable_files: list[DownloadableDatasetFile] = []
@@ -820,29 +972,15 @@ def build_timedb_annotation_archive_root(annotation_prefix: str) -> str:
     return f"{safe_prefix}_annotation"
 
 
-def resolve_timedb_annotation_download_files(
+def resolve_timedb_group_annotation_download_files(
+    *,
+    annotation_base_dir: Path,
     annotation_prefix: str,
+    archive_group_root: str,
 ) -> list[DownloadableDatasetFile]:
     """
-    TIMEDB annotation result files.
-
-    These files are generated by Module 3 / Hybrid Reference-like logic.
-
-    Example:
-        annotation_prefix: GSE19750
-
-    Source directory:
-        TIMEDB_DATASET_ANNOTATIONS_DIR / GSE19750 /
-
-    Missing files/directories are skipped.
+    Resolve downloadable annotation files for one TIMEDB group directory.
     """
-
-    annotation_prefix = validate_dataset_param(annotation_prefix)
-
-    annotation_base_dir = get_timedb_annotation_dataset_result_dir(
-        annotation_prefix
-    )
-    archive_root = build_timedb_annotation_archive_root(annotation_prefix)
 
     result_filenames = [
         f"{annotation_prefix}_ceRNA_axis.csv",
@@ -854,6 +992,7 @@ def resolve_timedb_annotation_download_files(
         f"{annotation_prefix}_map_immune_axis.csv",
         f"{annotation_prefix}_mRNA_gsea.csv",
         f"{annotation_prefix}_survival_analysis.csv",
+        f"{annotation_prefix}_sponge_result.csv",
     ]
 
     deg_method = "limma"
@@ -873,11 +1012,12 @@ def resolve_timedb_annotation_download_files(
             downloadable_files.append(
                 DownloadableDatasetFile(
                     path=file_path,
-                    arcname=f"{archive_root}/{filename}",
+                    arcname=f"{archive_group_root}/{filename}",
                 )
             )
 
     cm_drug_result_dirname = f"{annotation_prefix}_CMdrug_result"
+
     cm_drug_result_dir = (
         annotation_base_dir / cm_drug_result_dirname
     ).resolve()
@@ -886,7 +1026,10 @@ def resolve_timedb_annotation_download_files(
         downloadable_files.append(
             DownloadableDatasetFile(
                 path=cm_drug_result_dir,
-                arcname=f"{archive_root}/{cm_drug_result_dirname}/",
+                arcname=(
+                    f"{archive_group_root}/"
+                    f"{cm_drug_result_dirname}/"
+                ),
                 is_directory=True,
             )
         )
@@ -895,6 +1038,270 @@ def resolve_timedb_annotation_download_files(
         downloadable_files=downloadable_files,
         allowed_base_dir=annotation_base_dir,
     )
+
+
+
+def resolve_timedb_annotation_download_files(
+    annotation_prefix: str,
+) -> list[DownloadableDatasetFile]:
+    """
+    TIMEDB annotation result files.
+
+    Group directory mapping:
+        other -> {dataset_name}
+        grade -> {dataset_name}_grade
+        stage -> {dataset_name}_stage
+
+    Each available group directory uses the same result-file rules.
+    """
+
+    annotation_prefix = validate_dataset_param(annotation_prefix)
+
+    annotation_root_dir = get_timedb_annotation_result_dir()
+    archive_root = build_timedb_annotation_archive_root(annotation_prefix)
+
+    downloadable_files: list[DownloadableDatasetFile] = []
+
+    for candidate in build_timedb_group_by_candidates(annotation_prefix):
+        annotation_dir_name = candidate["annotation_dir_name"]
+        file_prefix = candidate["file_prefix"]
+
+        annotation_base_dir = (
+                annotation_root_dir / annotation_dir_name
+        ).resolve()
+
+        if not is_path_under_dir(
+                file_path=annotation_base_dir,
+                base_dir=annotation_root_dir,
+        ):
+            raise DatasetDownloadArchiveError(
+                "Invalid TIMEDB annotation group directory."
+            )
+
+        if (
+                not annotation_base_dir.exists()
+                or not annotation_base_dir.is_dir()
+        ):
+            continue
+
+        archive_group_root = (
+            f"{archive_root}/{annotation_dir_name}"
+        )
+
+        downloadable_files.extend(
+            resolve_timedb_group_annotation_download_files(
+                annotation_base_dir=annotation_base_dir,
+                annotation_prefix=file_prefix,
+                archive_group_root=archive_group_root,
+            )
+        )
+
+    return downloadable_files
+
+
+def build_scst_annotation_archive_name(
+    dataset_name: str,
+) -> str:
+    safe_dataset = sanitize_archive_filename_part(
+        dataset_name
+    )
+
+    return f"{safe_dataset}_annotation.zip"
+
+
+def build_scst_annotation_archive_root(
+    dataset_name: str,
+) -> str:
+    safe_dataset = sanitize_archive_filename_part(
+        dataset_name
+    )
+
+    return f"{safe_dataset}_annotation"
+
+
+def resolve_scst_group_annotation_download_files(
+    *,
+    dataset_name: str,
+    annotation_dir: Path,
+    group_values,
+    archive_group_root: str,
+) -> list[DownloadableDatasetFile]:
+    """
+    Resolve downloadable files for one SC/ST Dataset Annotation
+    group-by directory.
+
+    Each valid group_value follows the same output-file naming
+    convention as SCSTHybridReferenceTask.
+    """
+
+    downloadable_files: list[DownloadableDatasetFile] = []
+
+    for raw_group_value in group_values:
+        group_value = str(raw_group_value or "").strip()
+
+        if not group_value:
+            continue
+
+        # "/" values are explicitly unsupported by the upstream
+        # SC/ST result-generation workflow.
+        if should_skip_scst_group_value_for_results(group_value):
+            continue
+
+        # Dataset metadata is external data. A bad group value should
+        # not make the whole annotation download fail.
+        try:
+            group_value = validate_scst_group_value_path_component(
+                group_value
+            )
+        except DatasetAnnotationInputError:
+            continue
+
+        result_filenames = [
+            f"{dataset_name}_ceRNA_corr_{group_value}.csv",
+            f"{dataset_name}_ceRNA_{group_value}_axis.csv",
+            f"{dataset_name}_ceRNA_{group_value}_axis_final.csv",
+            f"{dataset_name}_ceRNA_{group_value}_background.csv",
+            f"{dataset_name}_ceRNA_{group_value}_network.csv",
+            f"{dataset_name}_CMap_{group_value}.csv",
+            f"{dataset_name}_deg_{group_value}.csv",
+            f"{dataset_name}_map_immune_axis_{group_value}.csv",
+            f"{dataset_name}_mRNA_deg_{group_value}_intersect.csv",
+            f"{dataset_name}_mRNA_deg_{group_value}_venn.csv",
+            f"{dataset_name}_mRNA_gsea_{group_value}.csv",
+            f"{dataset_name}_survival_analysis_{group_value}.csv",
+        ]
+
+        for filename in result_filenames:
+            file_path = (
+                annotation_dir / filename
+            ).resolve()
+
+            if file_path.exists() and file_path.is_file():
+                downloadable_files.append(
+                    DownloadableDatasetFile(
+                        path=file_path,
+                        arcname=(
+                            f"{archive_group_root}/{filename}"
+                        ),
+                    )
+                )
+
+        cm_drug_result_dirname = (
+            f"{dataset_name}_CMdrug_result_{group_value}"
+        )
+
+        cm_drug_result_dir = (
+            annotation_dir / cm_drug_result_dirname
+        ).resolve()
+
+        if (
+            cm_drug_result_dir.exists()
+            and cm_drug_result_dir.is_dir()
+        ):
+            downloadable_files.append(
+                DownloadableDatasetFile(
+                    path=cm_drug_result_dir,
+                    arcname=(
+                        f"{archive_group_root}/"
+                        f"{cm_drug_result_dirname}/"
+                    ),
+                    is_directory=True,
+                )
+            )
+
+    return validate_dataset_downloadable_files(
+        downloadable_files=downloadable_files,
+        allowed_base_dir=annotation_dir,
+    )
+
+
+def resolve_scst_annotation_download_files(
+    *,
+    dataset_name: str,
+    data_type: str,
+) -> list[DownloadableDatasetFile]:
+    """
+    Resolve SC/ST Dataset Annotation download files.
+
+    Hierarchy:
+        dataset
+            -> group_by annotation directory
+                -> group_value result files
+
+    Group-by configuration and group values are resolved from the
+    existing SC/ST Dataset Annotation metadata utilities.
+    """
+
+    dataset_name = validate_dataset_param(dataset_name)
+    data_type = validate_scst_data_type(data_type)
+
+    archive_root = build_scst_annotation_archive_root(
+        dataset_name
+    )
+
+    group_by_fields = get_scst_dataset_group_by_fields(
+        dataset_name
+    )
+
+    if not group_by_fields:
+        return []
+
+    meta_file = get_scst_dataset_meta_file_path(
+        dataset_name=dataset_name,
+        data_type=data_type,
+    )
+
+    (
+        group_counts_by_group_by,
+        _sample_count,
+    ) = read_scst_dataset_group_value_counts(
+        meta_file=meta_file,
+        group_by_fields=group_by_fields,
+    )
+
+    downloadable_files: list[DownloadableDatasetFile] = []
+
+    for group_by in group_by_fields:
+        annotation_dir = (
+            resolve_scst_dataset_group_annotation_dir(
+                dataset_name=dataset_name,
+                group_by=group_by,
+                data_type=data_type,
+            )
+        )
+
+        if (
+            not annotation_dir.exists()
+            or not annotation_dir.is_dir()
+        ):
+            continue
+
+        group_counts = group_counts_by_group_by.get(
+            group_by
+        )
+
+        if not group_counts:
+            continue
+
+        # Keep the physical group-by directory structure in the zip.
+        archive_group_root = (
+            f"{archive_root}/{annotation_dir.name}"
+        )
+
+        group_downloadable_files = (
+            resolve_scst_group_annotation_download_files(
+                dataset_name=dataset_name,
+                annotation_dir=annotation_dir,
+                group_values=group_counts.keys(),
+                archive_group_root=archive_group_root,
+            )
+        )
+
+        downloadable_files.extend(
+            group_downloadable_files
+        )
+
+    return downloadable_files
 
 
 def validate_dataset_downloadable_files(

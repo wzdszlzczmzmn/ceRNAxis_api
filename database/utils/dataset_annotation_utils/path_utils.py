@@ -17,7 +17,6 @@ RNA_TYPE_SUFFIXES = {
     "circRNA",
 }
 
-
 TIMEDB_GROUP_BY_SUFFIX_OPTIONS = {
     "grade": {
         "value": "grade",
@@ -29,19 +28,16 @@ TIMEDB_GROUP_BY_SUFFIX_OPTIONS = {
     },
 }
 
-
 TIMEDB_IGNORED_JSON_GROUP_BY_FIELDS = {
     "c_tumor_grade",
     "c_tumor_stage",
 }
-
 
 TIMEDB_GROUP_TYPES = {
     "other",
     "grade",
     "stage",
 }
-
 
 DATASET_ANNOTATION_AXIS_FINAL_SUFFIX = "_ceRNA_axis_final.csv"
 
@@ -146,9 +142,9 @@ def get_dataset_query_name(request) -> str:
 
 
 def resolve_dataset_annotation_dir(
-    *,
-    annotation_root_dir,
-    annotation_dir_name: str,
+        *,
+        annotation_root_dir,
+        annotation_dir_name: str,
 ) -> Path:
     annotation_dir_name = validate_annotation_dataset_name(annotation_dir_name)
 
@@ -172,15 +168,15 @@ def resolve_dataset_annotation_dir(
 
 
 def get_dataset_annotation_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
-    filename_suffix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
+        filename_suffix: str,
 ) -> Path:
     file_prefix = validate_annotation_dataset_name(file_prefix)
 
     file_path = (
-        annotation_dir / f"{file_prefix}{filename_suffix}"
+            annotation_dir / f"{file_prefix}{filename_suffix}"
     ).resolve()
 
     try:
@@ -194,9 +190,9 @@ def get_dataset_annotation_file_path(
 
 
 def get_dataset_annotation_axis_final_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -206,9 +202,9 @@ def get_dataset_annotation_axis_final_file_path(
 
 
 def get_dataset_annotation_cmap_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -218,12 +214,12 @@ def get_dataset_annotation_cmap_file_path(
 
 
 def get_dataset_annotation_deg_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
-    deg_method: str,
-    rna_type: str,
-    deg_scope: str = WORKFLOW_DEG_SCOPE_ALL,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
+        deg_method: str,
+        rna_type: str,
+        deg_scope: str = WORKFLOW_DEG_SCOPE_ALL,
 ) -> Path:
     filename = get_workflow_deg_filename(
         task_name=file_prefix,
@@ -245,12 +241,12 @@ def get_dataset_annotation_deg_file_path(
 
 
 def get_dataset_annotation_available_deg_rna_types(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
-    deg_method: str,
-    valid_rna_types: list[str],
-    deg_scope: str = WORKFLOW_DEG_SCOPE_ALL,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
+        deg_method: str,
+        valid_rna_types: list[str],
+        deg_scope: str = WORKFLOW_DEG_SCOPE_ALL,
 ) -> list[str]:
     available_rna_types = []
 
@@ -273,12 +269,12 @@ def get_dataset_annotation_available_deg_rna_types(
 
 
 def get_dataset_annotation_available_deg_scopes(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
-    deg_method: str,
-    rna_type: str,
-    valid_scopes: list[str],
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
+        deg_method: str,
+        rna_type: str,
+        valid_scopes: list[str],
 ) -> list[str]:
     available_scopes = []
 
@@ -301,9 +297,9 @@ def get_dataset_annotation_available_deg_scopes(
 
 
 def get_dataset_annotation_log2fc_background_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -313,9 +309,9 @@ def get_dataset_annotation_log2fc_background_file_path(
 
 
 def get_dataset_annotation_exp_correlation_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -325,9 +321,9 @@ def get_dataset_annotation_exp_correlation_file_path(
 
 
 def get_dataset_annotation_survival_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -337,9 +333,9 @@ def get_dataset_annotation_survival_file_path(
 
 
 def get_dataset_annotation_mrna_gsea_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -349,9 +345,9 @@ def get_dataset_annotation_mrna_gsea_file_path(
 
 
 def get_dataset_annotation_sponge_result_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -361,14 +357,14 @@ def get_dataset_annotation_sponge_result_file_path(
 
 
 def get_dataset_annotation_cmdrug_result_dir_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     file_prefix = validate_annotation_dataset_name(file_prefix)
 
     dir_path = (
-        annotation_dir / f"{file_prefix}{DATASET_ANNOTATION_CMDRUG_RESULT_DIR_SUFFIX}"
+            annotation_dir / f"{file_prefix}{DATASET_ANNOTATION_CMDRUG_RESULT_DIR_SUFFIX}"
     ).resolve()
 
     try:
@@ -382,9 +378,9 @@ def get_dataset_annotation_cmdrug_result_dir_path(
 
 
 def get_dataset_annotation_cerna_axis_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -394,9 +390,9 @@ def get_dataset_annotation_cerna_axis_file_path(
 
 
 def get_dataset_annotation_map_immune_axis_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -406,9 +402,9 @@ def get_dataset_annotation_map_immune_axis_file_path(
 
 
 def get_dataset_annotation_limma_mrna_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -418,9 +414,9 @@ def get_dataset_annotation_limma_mrna_file_path(
 
 
 def get_dataset_annotation_limma_mrna_intersect_file_path(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> Path:
     return get_dataset_annotation_file_path(
         annotation_dir=annotation_dir,
@@ -576,10 +572,11 @@ def get_timedb_other_group_by_option(dataset_name: str) -> dict | None:
         "file_prefix": dataset_name,
     }
 
+
 def get_timedb_suffix_group_by_option(
-    *,
-    dataset_name: str,
-    suffix: str,
+        *,
+        dataset_name: str,
+        suffix: str,
 ) -> dict | None:
     """
     Suffix annotation directories:
@@ -608,9 +605,9 @@ def get_timedb_suffix_group_by_option(
 
 
 def build_dataset_annotation_visualization_availability(
-    *,
-    annotation_dir: Path,
-    file_prefix: str,
+        *,
+        annotation_dir: Path,
+        file_prefix: str,
 ) -> dict:
     """
     Build visualization availability for one annotation directory.
@@ -705,8 +702,8 @@ def build_dataset_annotation_visualization_availability(
 
     visualizations = {
         "annotation_network": (
-            is_existing_file(cerna_axis_file)
-            and is_existing_file(map_immune_axis_file)
+                is_existing_file(cerna_axis_file)
+                and is_existing_file(map_immune_axis_file)
         ),
         "axis_final": is_existing_file(axis_final_file),
         "cmap": is_existing_file(cmap_file),
@@ -756,11 +753,12 @@ def build_timedb_group_by_candidates(dataset_name: str) -> list[dict]:
 
     return candidates
 
+
 def validate_timedb_group_selection(
-    *,
-    dataset_name: str,
-    group_by: str,
-    group_type: str | None,
+        *,
+        dataset_name: str,
+        group_by: str,
+        group_type: str | None,
 ) -> dict:
     """
     Validate one TIMEDB Dataset Annotation group selection against
@@ -807,8 +805,8 @@ def validate_timedb_group_selection(
 
     for candidate in candidates:
         if (
-            candidate.get("value") == group_by
-            and candidate.get("group_type") == group_type
+                candidate.get("value") == group_by
+                and candidate.get("group_type") == group_type
         ):
             return candidate
 
@@ -854,9 +852,9 @@ def get_timedb_group_type_query(request) -> str:
 
 
 def resolve_timedb_group_annotation_dir_name(
-    *,
-    dataset_name: str,
-    group_type: str | None,
+        *,
+        dataset_name: str,
+        group_type: str | None,
 ) -> str:
     dataset_name = resolve_timedb_annotation_dir_name(dataset_name)
     group_type = validate_timedb_group_type(group_type)
@@ -876,9 +874,9 @@ def resolve_timedb_group_annotation_dir_name(
 
 
 def resolve_timedb_group_annotation_file_prefix(
-    *,
-    dataset_name: str,
-    group_type: str | None,
+        *,
+        dataset_name: str,
+        group_type: str | None,
 ) -> str:
     """
     TIMEDB group folders use different directories, but the output file prefix

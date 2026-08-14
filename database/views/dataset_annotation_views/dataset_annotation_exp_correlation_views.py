@@ -66,6 +66,86 @@ RNA_TYPE_EXPRESSION_FILENAME_MAP = {
 
 TCGA_META_FILENAME_TEMPLATE = "{tcga_type}_meta.csv"
 
+TCGA_CANCER_TYPES = [
+    "ACC",
+    "BLCA",
+    "BRCA",
+    "CESC",
+    "CHOL",
+    "COAD",
+    "DLBC",
+    "ESCA",
+    "GBM",
+    "HNSC",
+    "KICH",
+    "KIRC",
+    "KIRP",
+    "LAML",
+    "LGG",
+    "LIHC",
+    "LUAD",
+    "LUSC",
+    "MESO",
+    "OV",
+    "PAAD",
+    "PCPG",
+    "PRAD",
+    "READ",
+    "SARC",
+    "SKCM",
+    "STAD",
+    "TGCT",
+    "THCA",
+    "THYM",
+    "UCEC",
+    "UCS",
+    "UVM",
+]
+
+CANCER_TYPE_TCGA_MAP = {
+    "AEL": "LAML",
+    "ALL": "LAML",
+    "AML": "LAML",
+    "CLL": "DLBC",
+    "MM": "MM",
+    "NHL": "DLBC",
+    "MF": "SKCM",
+    "PCFCL": "DLBC",
+
+    "BCC": "SKCM",
+    "MCC": "SKCM",
+
+    "NSCLC": "LUAD",
+    "SCLC": "LUAD",
+
+    "SCC": "HNSC",
+    "LSCC": "HNSC",
+    "OSCC": "HNSC",
+    "NPC": "HNSC",
+
+    "CRC": "COAD",
+
+    "GIST": "STAD",
+
+    "HB": "LIHC",
+    "NET": "LIHC",
+
+    "KIPAN": "KIRC",
+
+    "GLIOMA": "GBM",
+    "MB": "GBM",
+    "NEUROFIBROMA": "GBM",
+    "MPNST": "GBM",
+
+    "OS": "SARC",
+    "SS": "SARC",
+    "GCTB": "SARC",
+    "PPB": "SARC",
+
+    "RB": None,
+    "PBMC": None,
+}
+
 
 def normalize_tcga_type(value: str) -> str:
     value = str(value or "").strip().upper()
@@ -88,6 +168,38 @@ def normalize_tcga_type(value: str) -> str:
         )
 
     return tcga_type
+
+
+def resolve_tcga_type_from_cancer_type(value: str) -> str:
+    cancer_type = str(value or "").strip().upper()
+
+    if not cancer_type:
+        raise DatasetAnnotationInputError(
+            "Missing cancer_type for TCGA expression lookup."
+        )
+
+    # Standard TCGA cancer type:
+    # BRCA -> TCGA_BRCA
+    if cancer_type in TCGA_CANCER_TYPES:
+        return normalize_tcga_type(cancer_type)
+
+    # Non-TCGA cancer type:
+    # BCC -> SKCM -> TCGA_SKCM
+    if cancer_type not in CANCER_TYPE_TCGA_MAP:
+        raise DatasetAnnotationInputError(
+            f"Unsupported cancer type for TCGA reference mapping: "
+            f"{cancer_type}."
+        )
+
+    mapped_type = CANCER_TYPE_TCGA_MAP[cancer_type]
+
+    if mapped_type is None:
+        raise DatasetAnnotationInputError(
+            f"No TCGA reference cancer type is available for: "
+            f"{cancer_type}."
+        )
+
+    return normalize_tcga_type(mapped_type)
 
 
 def infer_tcga_type_from_annotation_dir_name(annotation_dir_name: str) -> str:
@@ -807,7 +919,7 @@ class TIMEDBDatasetAnnotationExpCorrelationMixin:
                 "Dataset metadata is required to resolve TIMEDB cancer_type."
             )
 
-        return normalize_tcga_type(
+        return resolve_tcga_type_from_cancer_type(
             getattr(metadata, "cancer_type", "")
         )
 
@@ -961,7 +1073,7 @@ class SCSTDatasetAnnotationExpCorrelationMixin:
                 "SC/ST Dataset Annotation cancer_type."
             )
 
-        return normalize_tcga_type(
+        return resolve_tcga_type_from_cancer_type(
             getattr(
                 metadata,
                 "cancer_type",

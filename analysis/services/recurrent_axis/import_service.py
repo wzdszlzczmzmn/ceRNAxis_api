@@ -17,7 +17,7 @@ from database.models import (
 )
 
 from .import_adapters import get_axis_result_adapter
-from .import_context import validate_context_spec
+from .import_context import validate_context_spec, validate_context_dataset_metadata, validate_context_result_kind
 from .import_contracts import (
     AxisContextSpec,
     NormalizedAxisRow,
@@ -78,8 +78,18 @@ def import_axis_result_file(
     _validate_batch_size(batch_size)
     validate_context_spec(context_spec)
 
+    validate_context_result_kind(
+        spec=context_spec,
+        result_kind=result_kind,
+    )
+
     dataset_metadata = _get_dataset_metadata(
         dataset_name=context_spec.dataset_name,
+    )
+
+    validate_context_dataset_metadata(
+        spec=context_spec,
+        dataset_metadata=dataset_metadata,
     )
 
     adapter = get_axis_result_adapter(result_kind)
@@ -105,6 +115,7 @@ def import_axis_result_file(
             "dataset_name": context_spec.dataset_name,
             "group_type": context_spec.group_type,
             "group_by": context_spec.group_by,
+            "group_value": context_spec.group_value,
             "result_kind": parsed.result_kind,
             "schema_version": parsed.schema_version,
             "file_name": parsed.file_path.name,
@@ -200,6 +211,7 @@ def _persist_axis_result_file(
             "dataset_name": context.dataset_name,
             "group_type": context.group_type,
             "group_by": context.group_by,
+            "group_value": context.group_value,
             "context_id": context.id,
             "context_created": context_created,
             "context_updated_fields": context_updated_fields,
@@ -269,6 +281,7 @@ def _persist_axis_result_file(
         "dataset_name": context.dataset_name,
         "group_type": context.group_type,
         "group_by": context.group_by,
+        "group_value": context.group_value,
         "context_id": context.id,
         "context_created": context_created,
         "context_updated_fields": context_updated_fields,
@@ -293,14 +306,13 @@ def upsert_context(
     dataset_metadata: DatasetMetadata,
 ) -> tuple[AxisDatasetContext, bool, list[str]]:
     """
-    Get or create the immutable context identity and refresh mutable metadata.
-
     Context identity:
         dataset_source
         module
         dataset_metadata
         group_type
         group_by
+        group_value
 
     Mutable fields:
         annotation_dir_name
@@ -313,6 +325,7 @@ def upsert_context(
         "dataset_metadata": dataset_metadata,
         "group_type": context_spec.group_type,
         "group_by": context_spec.group_by,
+        "group_value": context_spec.group_value,
     }
 
     context = (

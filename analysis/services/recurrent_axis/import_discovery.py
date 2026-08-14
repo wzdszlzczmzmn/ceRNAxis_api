@@ -11,8 +11,13 @@ from database.models import (
     AxisResultKind,
 )
 from database.utils.dataset_annotation_utils.path_utils import (
-    get_timedb_json_group_by_fields, TIMEDB_IGNORED_JSON_GROUP_BY_FIELDS,
+    get_timedb_json_group_by_fields, TIMEDB_IGNORED_JSON_GROUP_BY_FIELDS, DatasetAnnotationInputError,
 )
+from database.utils.dataset_annotation_utils.scst_metadata_utils import read_scst_dataset_group_value_counts
+from database.utils.dataset_annotation_utils.scst_path_utils import validate_scst_data_type, \
+    load_scst_dataset_group_cols, get_scst_dataset_group_by_fields, resolve_scst_dataset_group_annotation_dir, \
+    get_scst_dataset_meta_file_path, should_skip_scst_group_value_for_results, validate_scst_group_value_path_component, \
+    get_scst_dataset_axis_final_file_path
 
 from .import_context import validate_context_spec
 from .import_contracts import (
@@ -38,6 +43,11 @@ OtherGroupByResolver = Callable[
     [str, Path],
     str | None,
 ]
+
+SCST_SOURCE_BY_DATA_TYPE = {
+    "sc": AxisDatasetSource.SC,
+    "st": AxisDatasetSource.ST,
+}
 
 
 def iter_result_dirs(
@@ -203,6 +213,211 @@ def build_module3_import_jobs(
             templates=templates,
             schema_versions=versions,
         )
+
+    return jobs, missing_files
+
+
+def build_scst_import_jobs(
+    *,
+    data_type: str,
+    schema_version: str = "v1",
+) -> tuple[list[AxisImportJob], list[dict]]:
+    """
+    Discover SC/ST Module3 Axis Final result files.
+
+    SC:
+        data_type = sc
+        dataset_source = SC
+
+    ST:
+        data_type = st
+        dataset_source = ST
+
+    Context identity:
+        dataset
+        + group_by
+        + group_value
+
+    Result file:
+        {dataset}_ceRNA_{group_value}_axis_final.csv
+    """
+
+    data_type = validate_scst_data_type(
+        data_type
+    )
+
+    dataset_source = (
+        SCST_SOURCE_BY_DATA_TYPE[
+            data_type
+        ]
+    )
+
+    jobs: list[AxisImportJob] = []
+    missing_files: list[dict] = []
+
+    group_config = (
+        load_scst_dataset_group_cols()
+    )
+
+    for dataset_name in sorted(
+        group_config.keys(),
+        key=str.casefold,
+    ):
+        group_by_fields = (
+            get_scst_dataset_group_by_fields(
+                dataset_name
+            )
+        )
+
+        if not group_by_fields:
+            continue
+
+        # First determine which group-by directories actually
+        # exist under this SC or ST annotation root.
+        existing_group_dirs = []
+
+        for group_by in group_by_fields:
+            annotation_dir = (
+                resolve_scst_dataset_group_annotation_dir(
+                    dataset_name=dataset_name,
+                    group_by=group_by,
+                    data_type=data_type,
+                )
+            )
+
+            if (
+                annotation_dir.exists()
+                and annotation_dir.is_dir()
+            ):
+                existing_group_dirs.append(
+                    (
+                        group_by,
+                        annotation_dir,
+                    )
+                )
+
+        # This also prevents an SC dataset configured in the common
+        # group-col JSON from being interpreted as ST, and vice versa,
+        # when no result directory exists under that source root.
+        if not existing_group_dirs:
+            continue
+
+        meta_file = (
+            get_scst_dataset_meta_file_path(
+                dataset_name=dataset_name,
+                data_type=data_type,
+            )
+        )
+
+        (
+            group_counts_by_group_by,
+            _sample_count,
+        ) = read_scst_dataset_group_value_counts(
+            meta_file=meta_file,
+            group_by_fields=group_by_fields,
+        )
+
+        for (
+            group_by,
+            annotation_dir,
+        ) in existing_group_dirs:
+            group_counts = (
+                group_counts_by_group_by.get(
+                    group_by,
+                    {},
+                )
+            )
+
+            for raw_group_value in group_counts.keys():
+                group_value = str(
+                    raw_group_value or ""
+                ).strip()
+
+                if (
+                    should_skip_scst_group_value_for_results(
+                        group_value
+                    )
+                ):
+                    continue
+
+                try:
+                    group_value = (
+                        validate_scst_group_value_path_component(
+                            group_value
+                        )
+                    )
+                except DatasetAnnotationInputError as exc:
+                    raise AxisImportValidationError(
+                        "Invalid SC/ST group_value "
+                        f"for dataset={dataset_name!r}, "
+                        f"group_by={group_by!r}: "
+                        f"{group_value!r}."
+                    ) from exc
+
+                context = AxisContextSpec(
+                    dataset_source=dataset_source,
+                    module=AxisModule.MODULE3,
+                    dataset_name=dataset_name,
+                    group_type=AxisGroupType.OTHER,
+                    group_by=group_by,
+                    group_value=group_value,
+                    annotation_dir_name=(
+                        annotation_dir.name
+                    ),
+                    annotation_file_prefix=(
+                        dataset_name
+                    ),
+                )
+
+                validate_context_spec(
+                    context
+                )
+
+                file_path = (
+                    get_scst_dataset_axis_final_file_path(
+                        annotation_dir=annotation_dir,
+                        dataset_name=dataset_name,
+                        group_value=group_value,
+                    )
+                )
+
+                if file_path.is_file():
+                    jobs.append(
+                        AxisImportJob(
+                            context=context,
+                            result_kind=(
+                                AxisResultKind.AXIS_FINAL
+                            ),
+                            file_path=file_path,
+                            schema_version=schema_version,
+                        )
+                    )
+                    continue
+
+                missing_files.append({
+                    "dataset_source":
+                        context.dataset_source,
+                    "module":
+                        context.module,
+                    "dataset_name":
+                        context.dataset_name,
+                    "group_type":
+                        context.group_type,
+                    "group_by":
+                        context.group_by,
+                    "group_value":
+                        context.group_value,
+                    "annotation_dir_name":
+                        context.annotation_dir_name,
+                    "result_kind":
+                        AxisResultKind.AXIS_FINAL,
+                    "schema_version":
+                        schema_version,
+                    "file_path":
+                        str(file_path),
+                    "reason":
+                        "result_file_not_found",
+                })
 
     return jobs, missing_files
 
@@ -409,6 +624,8 @@ def import_axis_jobs(
                     job.context.group_type,
                 "group_by":
                     job.context.group_by,
+                "group_value":
+                    job.context.group_value,
                 "result_kind":
                     job.result_kind,
                 "schema_version":
@@ -517,6 +734,8 @@ def _append_context_jobs(
                 context.group_type,
             "group_by":
                 context.group_by,
+            "group_value":
+                context.group_value,
             "annotation_dir_name":
                 context.annotation_dir_name,
             "result_kind":
@@ -548,6 +767,8 @@ def _render_result_file_path(
             context.group_type,
         "group_by":
             context.group_by,
+        "group_value":
+            context.group_value,
         "result_kind":
             result_kind,
     }

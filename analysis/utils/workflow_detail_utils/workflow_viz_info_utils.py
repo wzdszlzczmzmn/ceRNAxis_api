@@ -80,6 +80,18 @@ def normalize_group_value(value) -> str:
     return str(value).strip()
 
 
+def is_safe_group_value_for_filename(value: str) -> bool:
+    value = str(value or "").strip()
+
+    if not value:
+        return False
+
+    if "/" in value or "\\" in value or ".." in value:
+        return False
+
+    return True
+
+
 def read_scst_group_value_counts(
     *,
     file_path: Path,
@@ -414,6 +426,10 @@ def read_scst_h5ad_group_value_counts(
                     f"in column '{group_col}' for observation "
                     f"'{obs_name}'."
                 )
+
+            # Ignore group values that are unsafe for result filenames.
+            if not is_safe_group_value_for_filename(group_value):
+                continue
 
             if group_value not in group_counts:
                 group_counts[group_value] = 0

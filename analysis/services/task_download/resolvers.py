@@ -11,6 +11,7 @@ from analysis.utils.paired_cohort_task_utils import (
     get_paired_cohort_task_output_dir,
     validate_task_name_for_filename as validate_paired_cohort_task_name,
 )
+from analysis.utils.workflow_detail_utils.workflow_viz_info_utils import get_scst_hybrid_reference_h5ad_group_info
 
 
 @dataclass(frozen=True)
@@ -69,27 +70,56 @@ def build_hybrid_reference_archive_name(task) -> str:
     return f"{build_archive_root_dir(task)}.zip"
 
 
+def build_scst_hybrid_reference_archive_name(task) -> str:
+    return f"{build_archive_root_dir(task)}.zip"
+
+
 def resolve_custom_list_query_result_files(task) -> list[DownloadableResultFile]:
     """
-    CustomListQueryTask result files:
+    CustomListQueryTask result files.
 
-        output/{task_name}_map_immune_gene_axis.csv
+    Download contents:
+        - CM_results/
+        - {task_name}_CMap.csv
+        - {task_name}_map_immune_gene.csv
+        - {task_name}_mRNA_down_enrichr.csv
+        - {task_name}_mRNA_up_enrichr.csv
     """
 
     validate_custom_task_name(task.task_name)
 
+    task_name = str(task.task_name).strip()
+    output_dir = Path(task.get_output_dir_absolute_path()).resolve()
     archive_root = build_archive_root_dir(task)
 
-    result_filename = get_immune_result_file_name(task)
-    result_file_path = get_immune_result_file_path(task)
-
-    return [
-        DownloadableResultFile(
-            path=result_file_path,
-            arcname=f"{archive_root}/{result_filename}",
-            required=True,
-        )
+    result_filenames = [
+        f"{task_name}_CMap.csv",
+        f"{task_name}_map_immune_gene.csv",
+        f"{task_name}_mRNA_down_enrichr.csv",
+        f"{task_name}_mRNA_up_enrichr.csv",
     ]
+
+    result_files = [
+        DownloadableResultFile(
+            path=(output_dir / filename).resolve(),
+            arcname=f"{archive_root}/{filename}",
+            required=False,
+        )
+        for filename in result_filenames
+    ]
+
+    cm_results_dirname = "CM_results"
+
+    result_files.append(
+        DownloadableResultFile(
+            path=(output_dir / cm_results_dirname).resolve(),
+            arcname=f"{archive_root}/{cm_results_dirname}/",
+            required=False,
+            is_directory=True,
+        )
+    )
+
+    return result_files
 
 
 def resolve_paired_cohort_result_files(task) -> list[DownloadableResultFile]:
@@ -127,6 +157,7 @@ def resolve_paired_cohort_result_files(task) -> list[DownloadableResultFile]:
         f"{task_name}_map_immune_axis.csv",
         f"{task_name}_mRNA_gsea.csv",
         f"{task_name}_survival_analysis.csv",
+        f"{task_name}_sponge_result.csv",
     ]
 
     result_files = [
@@ -203,6 +234,7 @@ def resolve_hybrid_reference_result_files(task) -> list[DownloadableResultFile]:
         f"{task_name}_map_immune_axis.csv",
         f"{task_name}_mRNA_gsea.csv",
         f"{task_name}_survival_analysis.csv",
+        f"{task_name}_sponge_result.csv",
     ]
 
     result_files = [
@@ -239,5 +271,78 @@ def resolve_hybrid_reference_result_files(task) -> list[DownloadableResultFile]:
             is_directory=True,
         )
     )
+
+    return result_files
+
+
+def resolve_scst_hybrid_reference_result_files(
+    task,
+) -> list[DownloadableResultFile]:
+    """
+    SCSTHybridReferenceTask result files.
+
+    Download rule:
+        - Result files are resolved for each valid group value.
+        - Existing files are packed into the zip archive.
+        - Missing files are skipped.
+        - {task_name}_CMdrug_result_{group_value}/ is included
+          as a directory entry for each group value.
+    """
+
+    validate_paired_cohort_task_name(task.task_name)
+
+    task_name = str(task.task_name).strip()
+
+    output_dir = Path(
+        task.get_output_dir_absolute_path()
+    ).resolve()
+
+    archive_root = build_archive_root_dir(task)
+
+    group_info = get_scst_hybrid_reference_h5ad_group_info(task)
+    group_values = group_info.get("group_values") or []
+
+    result_files = []
+
+    for group_value in group_values:
+        group_result_filenames = [
+            f"{task_name}_ceRNA_corr_{group_value}.csv",
+            f"{task_name}_ceRNA_{group_value}_axis.csv",
+            f"{task_name}_ceRNA_{group_value}_axis_final.csv",
+            f"{task_name}_ceRNA_{group_value}_background.csv",
+            f"{task_name}_ceRNA_{group_value}_network.csv",
+            f"{task_name}_CMap_{group_value}.csv",
+            f"{task_name}_deg_{group_value}.csv",
+            f"{task_name}_map_immune_axis_{group_value}.csv",
+            f"{task_name}_mRNA_deg_{group_value}_intersect.csv",
+            f"{task_name}_mRNA_deg_{group_value}_venn.csv",
+            f"{task_name}_mRNA_gsea_{group_value}.csv",
+            f"{task_name}_survival_analysis_{group_value}.csv",
+        ]
+
+        result_files.extend(
+            DownloadableResultFile(
+                path=(output_dir / filename).resolve(),
+                arcname=f"{archive_root}/{filename}",
+                required=False,
+            )
+            for filename in group_result_filenames
+        )
+
+        cm_drug_result_dirname = (
+            f"{task_name}_CMdrug_result_{group_value}"
+        )
+
+        result_files.append(
+            DownloadableResultFile(
+                path=(output_dir / cm_drug_result_dirname).resolve(),
+                arcname=(
+                    f"{archive_root}/"
+                    f"{cm_drug_result_dirname}/"
+                ),
+                required=False,
+                is_directory=True,
+            )
+        )
 
     return result_files

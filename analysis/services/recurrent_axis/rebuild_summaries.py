@@ -21,7 +21,7 @@ from database.models import (
 
 DEFAULT_BATCH_SIZE = 5000
 DEFAULT_ITERATOR_CHUNK_SIZE = 5000
-DEFAULT_SUMMARY_VERSION = 1
+DEFAULT_SUMMARY_VERSION = 2
 
 
 class RecurrentSummaryBuildError(ValueError):
@@ -112,6 +112,24 @@ def get_structure_summary_source_queryset() -> QuerySet:
                 ),
                 distinct=True,
             ),
+            sc_dataset_count=Count(
+                "context__dataset_metadata",
+                filter=Q(
+                    context__dataset_source=(
+                        AxisDatasetSource.SC
+                    ),
+                ),
+                distinct=True,
+            ),
+            st_dataset_count=Count(
+                "context__dataset_metadata",
+                filter=Q(
+                    context__dataset_source=(
+                        AxisDatasetSource.ST
+                    ),
+                ),
+                distinct=True,
+            ),
             tcga_context_count=Count(
                 "context_id",
                 filter=Q(
@@ -126,6 +144,24 @@ def get_structure_summary_source_queryset() -> QuerySet:
                 filter=Q(
                     context__dataset_source=(
                         AxisDatasetSource.TIMEDB
+                    ),
+                ),
+                distinct=True,
+            ),
+            sc_context_count=Count(
+                "context_id",
+                filter=Q(
+                    context__dataset_source=(
+                        AxisDatasetSource.SC
+                    ),
+                ),
+                distinct=True,
+            ),
+            st_context_count=Count(
+                "context_id",
+                filter=Q(
+                    context__dataset_source=(
+                        AxisDatasetSource.ST
                     ),
                 ),
                 distinct=True,
@@ -188,26 +224,47 @@ def iter_structure_summary_objects(
     ):
         yield AxisStructureRecurrentSummary(
             axis_id=row["axis_id"],
-            context_count=int(row["context_count"]),
-            dataset_count=int(row["dataset_count"]),
+
+            context_count=int(
+                row["context_count"]
+            ),
+            dataset_count=int(
+                row["dataset_count"]
+            ),
+
             tcga_dataset_count=int(
                 row["tcga_dataset_count"]
             ),
             timedb_dataset_count=int(
                 row["timedb_dataset_count"]
             ),
+            sc_dataset_count=int(
+                row["sc_dataset_count"]
+            ),
+            st_dataset_count=int(
+                row["st_dataset_count"]
+            ),
+
             tcga_context_count=int(
                 row["tcga_context_count"]
             ),
             timedb_context_count=int(
                 row["timedb_context_count"]
             ),
+            sc_context_count=int(
+                row["sc_context_count"]
+            ),
+            st_context_count=int(
+                row["st_context_count"]
+            ),
+
             module2_context_count=int(
                 row["module2_context_count"]
             ),
             module3_context_count=int(
                 row["module3_context_count"]
             ),
+
             axis_final_context_count=int(
                 row["axis_final_context_count"]
             ),
@@ -217,6 +274,7 @@ def iter_structure_summary_objects(
             both_result_context_count=int(
                 row["both_result_context_count"]
             ),
+
             summary_version=summary_version,
         )
 
