@@ -236,19 +236,6 @@ def read_scst_dataset_group_value_counts(
             "SC/ST dataset metadata has no data rows."
         )
 
-    for (
-        group_by,
-        counts,
-    ) in group_counts.items():
-        if not counts:
-            raise (
-                SCSTDatasetAnnotationMetadataError(
-                    "SC/ST dataset metadata "
-                    f"group-by column '{group_by}' "
-                    "has no values."
-                )
-            )
-
     return group_counts, row_count
 
 

@@ -328,6 +328,9 @@ def build_scst_import_jobs(
                 )
             )
 
+            if not group_counts:
+                continue
+
             for raw_group_value in group_counts.keys():
                 group_value = str(
                     raw_group_value or ""
