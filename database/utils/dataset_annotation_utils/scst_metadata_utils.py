@@ -192,18 +192,14 @@ def read_scst_dataset_group_value_counts(
                 )
 
             for row_number, row in enumerate(
-                reader,
-                start=2,
+                    reader,
+                    start=2,
             ):
                 row_count += 1
 
-                for group_by in (
-                    normalized_group_by_fields
-                ):
+                for group_by in normalized_group_by_fields:
                     meta_column = (
-                        meta_column_by_group_by[
-                            group_by
-                        ]
+                        meta_column_by_group_by[group_by]
                     )
 
                     group_value = (
@@ -212,23 +208,12 @@ def read_scst_dataset_group_value_counts(
                         )
                     )
 
+                    # Empty group values are valid in SC/ST metadata,
+                    # but they do not form an annotation group.
                     if not group_value:
-                        raise (
-                            SCSTDatasetAnnotationMetadataError(
-                                "SC/ST dataset metadata "
-                                "contains an empty value "
-                                f"for group_by '{group_by}' "
-                                f"(meta column "
-                                f"'{meta_column}') at "
-                                f"row {row_number}."
-                            )
-                        )
+                        continue
 
-                    counts = (
-                        group_counts[
-                            group_by
-                        ]
-                    )
+                    counts = group_counts[group_by]
 
                     if group_value not in counts:
                         counts[group_value] = 0
