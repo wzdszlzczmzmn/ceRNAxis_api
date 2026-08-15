@@ -120,8 +120,13 @@ class AxisRecurrentDetailSummarySerializer(
 
             "tcga_dataset_count",
             "timedb_dataset_count",
+            "sc_dataset_count",
+            "st_dataset_count",
+
             "tcga_context_count",
             "timedb_context_count",
+            "sc_context_count",
+            "st_context_count",
 
             "module2_context_count",
             "module3_context_count",
@@ -320,6 +325,11 @@ class AxisRecurrentContextRecordSerializer(
         read_only=True,
     )
 
+    group_value = serializers.CharField(
+        source="context.group_value",
+        read_only=True,
+    )
+
     annotation_dir_name = serializers.CharField(
         source="context.annotation_dir_name",
         read_only=True,
@@ -351,6 +361,7 @@ class AxisRecurrentContextRecordSerializer(
             "dataset_name",
             "group_type",
             "group_by",
+            "group_value",
 
             "annotation_dir_name",
             "annotation_file_prefix",

@@ -135,6 +135,14 @@ def build_axis_recurrent_meta() -> dict:
                         "label": "TIMEDB",
                         "value": "TIMEDB",
                     },
+                    {
+                        "label": "SC",
+                        "value": "SC",
+                    },
+                    {
+                        "label": "ST",
+                        "value": "ST",
+                    },
                 ],
             },
             {

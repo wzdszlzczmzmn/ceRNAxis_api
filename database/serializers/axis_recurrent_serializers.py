@@ -108,6 +108,8 @@ class AxisRecurrentSearchRequestSerializer(
             "context_count",
             "tcga_dataset_count",
             "timedb_dataset_count",
+            "sc_dataset_count",
+            "st_dataset_count",
             "axis_final_context_count",
             "sponge_context_count",
             "both_result_context_count",
@@ -249,8 +251,13 @@ class AxisStructureRecurrentSummarySerializer(
 
             "tcga_dataset_count",
             "timedb_dataset_count",
+            "sc_dataset_count",
+            "st_dataset_count",
+
             "tcga_context_count",
             "timedb_context_count",
+            "sc_context_count",
+            "st_context_count",
 
             "module2_context_count",
             "module3_context_count",

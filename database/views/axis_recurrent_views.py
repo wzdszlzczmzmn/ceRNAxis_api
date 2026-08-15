@@ -83,6 +83,10 @@ class AxisRecurrentSummarySearchView(ListAPIView):
             "tcga_dataset_count",
         "timedb_dataset_count":
             "timedb_dataset_count",
+        "sc_dataset_count":
+            "sc_dataset_count",
+        "st_dataset_count":
+            "st_dataset_count",
 
         "axis_final_context_count":
             "axis_final_context_count",
@@ -135,9 +139,9 @@ class AxisRecurrentSummarySearchView(ListAPIView):
         return self._validated_search_data
 
     def apply_source_filter(
-        self,
-        queryset,
-        sources,
+            self,
+            queryset,
+            sources,
     ):
         if not sources:
             return queryset
@@ -154,7 +158,19 @@ class AxisRecurrentSummarySearchView(ListAPIView):
                 timedb_dataset_count__gt=0,
             )
 
-        return queryset.filter(source_query)
+        if "SC" in sources:
+            source_query |= Q(
+                sc_dataset_count__gt=0,
+            )
+
+        if "ST" in sources:
+            source_query |= Q(
+                st_dataset_count__gt=0,
+            )
+
+        return queryset.filter(
+            source_query
+        )
 
     def apply_filters(
             self,

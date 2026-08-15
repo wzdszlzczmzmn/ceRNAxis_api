@@ -42,6 +42,7 @@ class AxisRecurrentDetailView(APIView):
         dataset_name=TCGA_BRCA_mRNA
         group_type=none
         group_by=
+        group_value=
         has_axis_final=true
         has_sponge=true
         has_both_result_context=true
@@ -190,6 +191,11 @@ class AxisRecurrentDetailView(APIView):
             "group_by",
         )
 
+        group_value = self.normalize_query_value(
+            request,
+            "group_value",
+        )
+
         axis_regulation = self.normalize_query_value(
             request,
             "axis_regulation",
@@ -272,6 +278,11 @@ class AxisRecurrentDetailView(APIView):
         if "group_by" in request.query_params:
             queryset = queryset.filter(
                 context__group_by=group_by,
+            )
+
+        if "group_value" in request.query_params:
+            queryset = queryset.filter(
+                context__group_value=group_value,
             )
 
         if has_axis_final is not None:
@@ -529,6 +540,7 @@ class AxisRecurrentDetailView(APIView):
                 "context__dataset_metadata_id",
                 "context__group_type",
                 "context__group_by",
+                "context__group_value",
                 "context_id",
             )
         )
