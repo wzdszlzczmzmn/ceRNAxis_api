@@ -1174,6 +1174,9 @@ class TISCH2DEGClusterPlotView(APIView):
     DEFAULT_PANEL_GAP = 0
     MIN_X_ABS_LIMIT = 1.0
 
+    ZERO_PADJ_NEG_LOG10_OFFSET = 1.0
+    ZERO_PADJ_FALLBACK_NEG_LOG10 = 300.0
+
     def parse_float_param(
         self,
         request,
@@ -1352,15 +1355,23 @@ class TISCH2DEGClusterPlotView(APIView):
 
         dropna_count = before_dropna_count - int(df.shape[0])
 
-        zero_p_count = int((df["adjusted_p"] == 0).sum())
-        invalid_p_count = int(
-            ((df["adjusted_p"] < 0) | (df["adjusted_p"] > 1)).sum()
+        zero_p_count = int(
+            (df["adjusted_p"] == 0).sum()
         )
 
+        invalid_p_count = int(
+            (
+                    (df["adjusted_p"] < 0)
+                    | (df["adjusted_p"] > 1)
+            ).sum()
+        )
+
+        # p = 0 是合法结果，不删除。
+        # 这里只清理真正非法的 adjusted p-value。
         df = df[
-            (df["adjusted_p"] > 0)
+            (df["adjusted_p"] >= 0)
             & (df["adjusted_p"] <= 1)
-        ].copy()
+            ].copy()
 
         if df.empty:
             return Response(
@@ -1389,7 +1400,63 @@ class TISCH2DEGClusterPlotView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        df["neg_log10_adjusted_p"] = -np.log10(df["adjusted_p"])
+        df["is_zero_adjusted_p"] = (
+                df["adjusted_p"] == 0
+        )
+
+        positive_p_mask = (
+                df["adjusted_p"] > 0
+        )
+
+        positive_p_values = df.loc[
+            positive_p_mask,
+            "adjusted_p",
+        ]
+
+        if not positive_p_values.empty:
+            min_positive_pvalue = float(
+                positive_p_values.min()
+            )
+
+            max_finite_neg_log10 = float(
+                -np.log10(min_positive_pvalue)
+            )
+
+            zero_p_plot_y = (
+                    max_finite_neg_log10
+                    + self.ZERO_PADJ_NEG_LOG10_OFFSET
+            )
+
+            used_zero_p_fallback = False
+
+        else:
+            min_positive_pvalue = None
+            max_finite_neg_log10 = None
+
+            zero_p_plot_y = (
+                self.ZERO_PADJ_FALLBACK_NEG_LOG10
+            )
+
+            used_zero_p_fallback = True
+
+        # 普通的 adjusted p-value 正常计算
+        df["neg_log10_adjusted_p"] = np.nan
+
+        df.loc[
+            positive_p_mask,
+            "neg_log10_adjusted_p",
+        ] = -np.log10(
+            df.loc[
+                positive_p_mask,
+                "adjusted_p",
+            ]
+        )
+
+        # adjusted_p == 0 使用专门的绘图坐标
+        df.loc[
+            df["is_zero_adjusted_p"],
+            "neg_log10_adjusted_p",
+        ] = zero_p_plot_y
 
         df["regulation"] = "Not"
         df.loc[
@@ -1492,24 +1559,44 @@ class TISCH2DEGClusterPlotView(APIView):
                 "cluster": row["cluster"],
                 "panel_index": int(row["panel_index"]),
                 "gene": row["gene"],
+
                 "log2FC": float(row["log2FC"]),
-                "scaled_log2FC": float(row["scaled_log2FC"]),
-                "cluster_x_abs_max": float(row["cluster_x_abs_max"]),
-                "percentage": float(row["percentage"]),
-                "adjusted_p": float(row["adjusted_p"]),
+                "scaled_log2FC": float(
+                    row["scaled_log2FC"]
+                ),
+                "cluster_x_abs_max": float(
+                    row["cluster_x_abs_max"]
+                ),
+
+                "percentage": float(
+                    row["percentage"]
+                ),
+
+                "adjusted_p": float(
+                    row["adjusted_p"]
+                ),
+
                 "neg_log10_adjusted_p": float(
                     row["neg_log10_adjusted_p"]
                 ),
+
+                "is_zero_adjusted_p": bool(
+                    row["is_zero_adjusted_p"]
+                ),
+
                 "plot_x": float(row["plot_x"]),
                 "plot_y": float(row["plot_y"]),
+
                 "regulation": row["regulation"],
-                "celltype_malignancy": row["celltype_malignancy"],
-                "celltype_major_lineage": row[
-                    "celltype_major_lineage"
-                ],
-                "celltype_minor_lineage": row[
-                    "celltype_minor_lineage"
-                ],
+
+                "celltype_malignancy":
+                    row["celltype_malignancy"],
+
+                "celltype_major_lineage":
+                    row["celltype_major_lineage"],
+
+                "celltype_minor_lineage":
+                    row["celltype_minor_lineage"],
             }
             for _, row in df.iterrows()
         ]
@@ -1524,7 +1611,7 @@ class TISCH2DEGClusterPlotView(APIView):
                     "raw_count": raw_count,
                     "cleaned_count": cleaned_count,
                     "dropna_count": dropna_count,
-                    "zero_p_dropped_count": zero_p_count,
+                    "zero_p_count": zero_p_count,
                     "invalid_p_dropped_count": invalid_p_count,
                     "up_count": up_count,
                     "down_count": down_count,
@@ -1543,6 +1630,24 @@ class TISCH2DEGClusterPlotView(APIView):
                 },
                 "clusters": cluster_panels,
                 "points": points,
+                "zero_pvalue_plot": {
+                    "count": zero_p_count,
+                    "min_positive_pvalue": (
+                        min_positive_pvalue
+                    ),
+                    "max_finite_neg_log10_pvalue": (
+                        max_finite_neg_log10
+                    ),
+                    "neg_log10_offset": float(
+                        self.ZERO_PADJ_NEG_LOG10_OFFSET
+                    ),
+                    "neg_log10_plot_y": float(
+                        zero_p_plot_y
+                    ),
+                    "used_fallback": (
+                        used_zero_p_fallback
+                    ),
+                },
             },
             status=status.HTTP_200_OK,
         )

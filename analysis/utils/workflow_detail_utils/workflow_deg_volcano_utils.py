@@ -30,6 +30,13 @@ WORKFLOW_DEG_HYBRID_REFERENCE_RNA_TYPES = [
 WORKFLOW_DEG_SCOPE_ALL = "all"
 WORKFLOW_DEG_SCOPE_INTERSECT = "intersect"
 
+
+# p-value == 0 cannot be transformed directly with -log10.  For volcano
+# visualization, zero p-values are placed above the most significant finite
+# p-value while the original p-value itself remains 0.
+ZERO_PVALUE_NEG_LOG10_OFFSET = 1.0
+ZERO_PVALUE_FALLBACK_NEG_LOG10 = 300.0
+
 WORKFLOW_DEG_PAIRED_COHORT_SCOPES = [
     WORKFLOW_DEG_SCOPE_ALL,
 ]
@@ -314,8 +321,11 @@ def normalize_workflow_deg_dataframe(
         normalized_df["gene_name"] != ""
     ]
 
+    # Keep p-value == 0.  These values commonly arise from numerical
+    # underflow and should not be discarded from a volcano plot.
+    # Negative values and values > 1 remain invalid.
     normalized_df = normalized_df[
-        normalized_df["pvalue"] > 0
+        normalized_df["pvalue"] >= 0
     ]
 
     normalized_df = normalized_df[
@@ -331,9 +341,61 @@ def normalize_workflow_deg_dataframe(
     cleaned_count = int(normalized_df.shape[0])
     dropped_count = raw_count - cleaned_count
 
-    normalized_df["neg_log10_pvalue"] = -np.log10(
-        normalized_df["pvalue"]
+    normalized_df["is_zero_pvalue"] = (
+        normalized_df["pvalue"] == 0
     )
+
+    positive_mask = normalized_df["pvalue"] > 0
+    zero_mask = normalized_df["is_zero_pvalue"]
+
+    # First calculate the real -log10(p) values for all finite positive
+    # p-values.  The zero p-values are assigned a separate plotting height
+    # below, without changing their original pvalue field.
+    normalized_df["neg_log10_pvalue"] = np.nan
+    normalized_df.loc[
+        positive_mask,
+        "neg_log10_pvalue",
+    ] = -np.log10(
+        normalized_df.loc[positive_mask, "pvalue"]
+    )
+
+    positive_pvalues = normalized_df.loc[
+        positive_mask,
+        "pvalue",
+    ]
+
+    if not positive_pvalues.empty:
+        min_positive_pvalue = float(positive_pvalues.min())
+        max_finite_neg_log10 = float(
+            -np.log10(min_positive_pvalue)
+        )
+        zero_pvalue_neg_log10 = (
+            max_finite_neg_log10
+            + ZERO_PVALUE_NEG_LOG10_OFFSET
+        )
+    else:
+        min_positive_pvalue = None
+        max_finite_neg_log10 = None
+        zero_pvalue_neg_log10 = (
+            ZERO_PVALUE_FALLBACK_NEG_LOG10
+        )
+
+    normalized_df.loc[
+        zero_mask,
+        "neg_log10_pvalue",
+    ] = zero_pvalue_neg_log10
+
+    # Store zero-p-value plotting metadata separately from the original
+    # statistical values.  The response builder exposes this metadata to the
+    # frontend so it can draw the dedicated "extremely significant" line.
+    normalized_df.attrs["zero_pvalue_plot"] = {
+        "count": int(zero_mask.sum()),
+        "min_positive_pvalue": min_positive_pvalue,
+        "max_finite_neg_log10_pvalue": max_finite_neg_log10,
+        "neg_log10_offset": ZERO_PVALUE_NEG_LOG10_OFFSET,
+        "neg_log10_plot_y": float(zero_pvalue_neg_log10),
+        "used_fallback": min_positive_pvalue is None,
+    }
 
     return normalized_df, raw_count, cleaned_count, dropped_count
 
@@ -352,6 +414,7 @@ def build_workflow_deg_volcano_groups(
                 "log2FC": float(row["log2FC"]),
                 "pvalue": float(row["pvalue"]),
                 "neg_log10_pvalue": float(row["neg_log10_pvalue"]),
+                "is_zero_pvalue": bool(row["is_zero_pvalue"]),
             }
             for _, row in sub_df.iterrows()
         ]
@@ -437,6 +500,10 @@ def build_deg_volcano_response_data_from_dataframe(
         )
 
     groups = build_workflow_deg_volcano_groups(volcano_df)
+    zero_pvalue_plot = volcano_df.attrs.get(
+        "zero_pvalue_plot",
+        {},
+    )
 
     response_data = {
         "deg_method": deg_method,
@@ -447,6 +514,7 @@ def build_deg_volcano_response_data_from_dataframe(
         "use_padj": use_padj,
         "pvalue_source": pvalue_source,
         "pvalue_label": pvalue_label,
+        "zero_pvalue_plot": zero_pvalue_plot,
 
         "summary": {
             "raw_count": raw_count,
