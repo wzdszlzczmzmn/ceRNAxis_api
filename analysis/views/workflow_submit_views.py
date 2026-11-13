@@ -94,9 +94,9 @@ class CustomListQueryTaskSubmitView(APIView):
                 prepare_custom_list_query_workspace(task)
 
             except (
-                OSError,
-                CustomListQueryTaskInputError,
-                CustomListQueryPathError,
+                    OSError,
+                    CustomListQueryTaskInputError,
+                    CustomListQueryPathError,
             ) as exc:
                 task.status = (
                     CustomListQueryTask.Status.Failed
@@ -193,28 +193,62 @@ class CustomListQueryTaskSubmitView(APIView):
 
 
 class PairedCohortTaskSubmitView(APIView):
+    # PAIRED_COHORT_ALLOWED_CANCER_TYPES = [
+    #     "MEL",
+    #     "LUAD",
+    #     "OS",
+    #     "STAD",
+    #     "BRCA",
+    #     "CRC",
+    #     "NSCLC",
+    #     "OV",
+    #     "LUSC",
+    #     "UCEC",
+    #     "CESC",
+    #     "HCC",
+    #     "AML",
+    #     "ALL",
+    #     "PRAD",
+    #     "SCLC",
+    #     "NBL",
+    #     "MM",
+    #     "Lymphoma",
+    #     "PAAD",
+    #     "",
+    # ]
     PAIRED_COHORT_ALLOWED_CANCER_TYPES = [
-        "MEL",
-        "LUAD",
-        "OS",
-        "STAD",
+        "ACC",
+        "BLCA",
         "BRCA",
-        "CRC",
-        "NSCLC",
-        "OV",
-        "LUSC",
-        "UCEC",
         "CESC",
-        "HCC",
-        "AML",
-        "ALL",
-        "PRAD",
-        "SCLC",
-        "NBL",
-        "MM",
-        "Lymphoma",
+        "CHOL",
+        "COAD",
+        "DLBC",
+        "ESCA",
+        "HNSC",
+        "KICH",
+        "KIRC",
+        "KIRP",
+        "LAML",
+        "LGG",
+        "LIHC",
+        "LUAD",
+        "LUSC",
+        "MESO",
+        "OV",
         "PAAD",
-        "",
+        "PCPG",
+        "PRAD",
+        "READ",
+        "SARC",
+        "SKCM",
+        "STAD",
+        "TGCT",
+        "THCA",
+        "THYM",
+        "UCEC",
+        "UCS",
+        "UVM"
     ]
 
     parser_classes = [MultiPartParser, FormParser]
@@ -1030,9 +1064,9 @@ class SCSTHybridReferenceTaskSubmitView(APIView):
                 )
 
             except (
-                OSError,
-                FileNotFoundError,
-                SCSTHybridReferenceTaskPathError,
+                    OSError,
+                    FileNotFoundError,
+                    SCSTHybridReferenceTaskPathError,
             ) as exc:
                 self.mark_task_failed(task)
 
@@ -1095,9 +1129,9 @@ class SCSTHybridReferenceTaskSubmitView(APIView):
             )
 
         except (
-            ValueError,
-            SCSTHybridReferenceTaskInputError,
-            SCSTHybridReferenceTaskPathError,
+                ValueError,
+                SCSTHybridReferenceTaskInputError,
+                SCSTHybridReferenceTaskPathError,
         ) as exc:
             return self.error_response(
                 str(exc),
