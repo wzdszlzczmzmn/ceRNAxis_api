@@ -305,6 +305,7 @@ def serialize_context_project_match(
         "dataset_name": dataset_name,
         "group_type": context.group_type,
         "group_by": context.group_by,
+        "group_value": context.group_value,
 
         "annotation_dir_name":
             context.annotation_dir_name,
@@ -453,11 +454,11 @@ def build_axis_project_match_summary(
     valid_axis_keys = set()
     matched_axis_keys = set()
 
-    matched_project_keys = set()
     matched_dataset_keys = set()
-    axis_project_pairs = set()
 
-    project_axis_keys = defaultdict(set)
+    # The legacy project key is shared by SC/ST contexts with different values.
+    first_match_by_context_id = {}
+    axis_keys_by_context_id = defaultdict(set)
 
     for record in records:
         axis_key = normalize_text(
@@ -480,40 +481,20 @@ def build_axis_project_match_summary(
             matched_axis_keys.add(axis_key)
 
         for match in matches:
-            project_key = match["project_key"]
-
-            matched_project_keys.add(
-                project_key
-            )
+            context_id = match["context_id"]
+            first_match_by_context_id.setdefault(context_id, match)
+            axis_keys_by_context_id[context_id].add(axis_key)
             matched_dataset_keys.add((
                 match["dataset_source"],
                 match["dataset_name"],
             ))
-            axis_project_pairs.add((
-                axis_key,
-                project_key,
-            ))
-            project_axis_keys[
-                project_key
-            ].add(axis_key)
 
-    project_hits = []
+    context_hits = []
 
-    for (
-        project_key,
-        project_matched_axis_keys,
-    ) in project_axis_keys.items():
-        first_match = next(
-            match
-            for matches in matches_by_axis_key.values()
-            for match in matches
-            if match["project_key"] == project_key
-        )
-
-        project_hits.append({
-            "project_key": project_key,
-            "context_id":
-                first_match["context_id"],
+    for context_id, first_match in first_match_by_context_id.items():
+        context_hits.append({
+            "project_key": first_match["project_key"],
+            "context_id": context_id,
             "dataset_source":
                 first_match["dataset_source"],
             "source":
@@ -526,12 +507,14 @@ def build_axis_project_match_summary(
                 first_match["group_type"],
             "group_by":
                 first_match["group_by"],
+            "group_value":
+                first_match["group_value"],
             "matched_axis_count": len(
-                project_matched_axis_keys
+                axis_keys_by_context_id[context_id]
             ),
         })
 
-    project_hits.sort(
+    context_hits.sort(
         key=lambda item: (
             -item["matched_axis_count"],
             item["dataset_source"],
@@ -539,6 +522,8 @@ def build_axis_project_match_summary(
             item["dataset_name"],
             item["group_type"],
             item["group_by"],
+            item["group_value"],
+            item["context_id"],
         )
     )
 
@@ -576,13 +561,11 @@ def build_axis_project_match_summary(
         "matched_dataset_count": len(
             matched_dataset_keys
         ),
-        "matched_context_count": len(
-            matched_project_keys
+        "matched_context_count": len(context_hits),
+        "axis_context_match_count": sum(
+            hit["matched_axis_count"] for hit in context_hits
         ),
-        "axis_context_match_count": len(
-            axis_project_pairs
-        ),
-        "context_hits": project_hits,
+        "context_hits": context_hits,
 
         # Transitional aliases.
         "total_axis_count":
@@ -593,10 +576,8 @@ def build_axis_project_match_summary(
             total_record_count
             - matched_record_count
         ),
-        "matched_project_count": len(
-            matched_project_keys
-        ),
-        "project_hits": project_hits,
+        "matched_project_count": len(context_hits),
+        "project_hits": context_hits,
     }
 
 
